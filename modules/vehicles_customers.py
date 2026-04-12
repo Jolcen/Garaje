@@ -1,10 +1,45 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
 
 from database.db import get_connection
 
 
+# =========================================================
+# CATÁLOGOS
+# =========================================================
+ESTADO_GENERAL_INACTIVO = 0
+ESTADO_GENERAL_ACTIVO = 1
+
+ESTADO_OPERACION_ACTIVO = 1
+ESTADO_CONTRATO_ACTIVO = 1
+
+
+# =========================================================
+# UTILIDADES
+# =========================================================
+def obtener_usuario_actual_id(user_data):
+    if not user_data:
+        return 0
+    return user_data.get("Usuario") or user_data.get("id") or 0
+
+
+def limpiar_placa_para_busqueda(placa):
+    return placa.replace(" ", "").replace("-", "").upper().strip()
+
+
+def nombre_cliente_completo(nombres, apellidos):
+    nombres = (nombres or "").strip()
+    apellidos = (apellidos or "").strip()
+    return f"{nombres} {apellidos}".strip()
+
+
+def texto_o_vacio(valor):
+    return valor if valor else ""
+
+
+# =========================================================
+# VISTA PRINCIPAL
+# =========================================================
 class VehiclesCustomersView:
     def __init__(self, parent, user_data):
         self.parent = parent
@@ -71,38 +106,41 @@ class VehiclesCustomersView:
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
         columns = (
-            "id",
-            "placa",
-            "tipo_vehiculo",
-            "marca",
-            "modelo",
-            "color",
-            "cliente",
-            "telefono",
-            "acciones"
+            "Vehiculo",
+            "Placa",
+            "TipoVehiculo",
+            "Marca",
+            "Modelo",
+            "Color",
+            "Cliente",
+            "Telefono",
+            "Documento",
+            "Acciones"
         )
 
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
 
-        self.tree.heading("id", text="ID")
-        self.tree.heading("placa", text="Placa")
-        self.tree.heading("tipo_vehiculo", text="Tipo")
-        self.tree.heading("marca", text="Marca")
-        self.tree.heading("modelo", text="Modelo")
-        self.tree.heading("color", text="Color")
-        self.tree.heading("cliente", text="Cliente")
-        self.tree.heading("telefono", text="Teléfono")
-        self.tree.heading("acciones", text="Acciones")
+        self.tree.heading("Vehiculo", text="ID")
+        self.tree.heading("Placa", text="Placa")
+        self.tree.heading("TipoVehiculo", text="Tipo")
+        self.tree.heading("Marca", text="Marca")
+        self.tree.heading("Modelo", text="Modelo")
+        self.tree.heading("Color", text="Color")
+        self.tree.heading("Cliente", text="Cliente")
+        self.tree.heading("Telefono", text="Teléfono")
+        self.tree.heading("Documento", text="Documento")
+        self.tree.heading("Acciones", text="Acciones")
 
-        self.tree.column("id", width=55, anchor="center", stretch=False)
-        self.tree.column("placa", width=100, anchor="center", stretch=False)
-        self.tree.column("tipo_vehiculo", width=90, anchor="center", stretch=False)
-        self.tree.column("marca", width=100, anchor="center", stretch=False)
-        self.tree.column("modelo", width=100, anchor="center", stretch=False)
-        self.tree.column("color", width=90, anchor="center", stretch=False)
-        self.tree.column("cliente", width=180, anchor="w", stretch=False)
-        self.tree.column("telefono", width=110, anchor="center", stretch=False)
-        self.tree.column("acciones", width=100, anchor="center", stretch=False)
+        self.tree.column("Vehiculo", width=55, anchor="center", stretch=False)
+        self.tree.column("Placa", width=100, anchor="center", stretch=False)
+        self.tree.column("TipoVehiculo", width=90, anchor="center", stretch=False)
+        self.tree.column("Marca", width=100, anchor="center", stretch=False)
+        self.tree.column("Modelo", width=100, anchor="center", stretch=False)
+        self.tree.column("Color", width=90, anchor="center", stretch=False)
+        self.tree.column("Cliente", width=180, anchor="w", stretch=False)
+        self.tree.column("Telefono", width=110, anchor="center", stretch=False)
+        self.tree.column("Documento", width=120, anchor="center", stretch=False)
+        self.tree.column("Acciones", width=100, anchor="center", stretch=False)
 
         scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         scrollbar_x = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
@@ -132,33 +170,37 @@ class VehiclesCustomersView:
 
         query = """
             SELECT
-                v.id,
-                v.placa,
-                v.tipo_vehiculo,
-                v.marca,
-                v.modelo,
-                v.color,
-                c.nombre,
-                c.telefono
-            FROM vehiculos v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
-            WHERE 1=1
+                V.Vehiculo,
+                V.Placa,
+                V.TipoVehiculo,
+                V.Marca,
+                V.Modelo,
+                V.Color,
+                C.Nombres,
+                C.Apellidos,
+                C.Telefono,
+                C.DocumentoIdentidad
+            FROM VEHICULO V
+            LEFT JOIN CLIENTE C ON V.Cliente = C.Cliente
+            WHERE V.Estado = ?
         """
-        params = []
+        params = [ESTADO_GENERAL_ACTIVO]
 
         if search_value:
             like_value = f"%{search_value}%"
-            like_plate_value = f"%{search_value.replace(' ', '')}%"
+            like_plate_value = f"%{limpiar_placa_para_busqueda(search_value)}%"
 
             query += """
                 AND (
-                    REPLACE(UPPER(v.placa), ' ', '') LIKE ?
-                    OR UPPER(v.tipo_vehiculo) LIKE ?
-                    OR UPPER(IFNULL(v.marca, '')) LIKE ?
-                    OR UPPER(IFNULL(v.modelo, '')) LIKE ?
-                    OR UPPER(IFNULL(v.color, '')) LIKE ?
-                    OR UPPER(IFNULL(c.nombre, '')) LIKE ?
-                    OR IFNULL(c.telefono, '') LIKE ?
+                    REPLACE(REPLACE(UPPER(V.Placa), ' ', ''), '-', '') LIKE ?
+                    OR UPPER(IFNULL(V.TipoVehiculo, '')) LIKE ?
+                    OR UPPER(IFNULL(V.Marca, '')) LIKE ?
+                    OR UPPER(IFNULL(V.Modelo, '')) LIKE ?
+                    OR UPPER(IFNULL(V.Color, '')) LIKE ?
+                    OR UPPER(IFNULL(C.Nombres, '')) LIKE ?
+                    OR UPPER(IFNULL(C.Apellidos, '')) LIKE ?
+                    OR IFNULL(C.Telefono, '') LIKE ?
+                    OR UPPER(IFNULL(C.DocumentoIdentidad, '')) LIKE ?
                 )
             """
             params.extend([
@@ -168,28 +210,33 @@ class VehiclesCustomersView:
                 like_value,
                 like_value,
                 like_value,
-                f"%{search_value}%"
+                like_value,
+                f"%{search_value}%",
+                like_value
             ])
 
-        query += " ORDER BY v.id ASC"
+        query += " ORDER BY V.Vehiculo ASC "
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
 
         for row in rows:
+            cliente = nombre_cliente_completo(row["Nombres"], row["Apellidos"])
+
             self.tree.insert(
                 "",
                 "end",
                 values=(
-                    row[0],
-                    row[1],
-                    row[2],
-                    row[3] if row[3] else "",
-                    row[4] if row[4] else "",
-                    row[5] if row[5] else "",
-                    row[6] if row[6] else "",
-                    row[7] if row[7] else "",
+                    row["Vehiculo"],
+                    row["Placa"],
+                    row["TipoVehiculo"],
+                    texto_o_vacio(row["Marca"]),
+                    texto_o_vacio(row["Modelo"]),
+                    texto_o_vacio(row["Color"]),
+                    cliente,
+                    texto_o_vacio(row["Telefono"]),
+                    texto_o_vacio(row["DocumentoIdentidad"]),
                     "Doble clic"
                 )
             )
@@ -292,24 +339,24 @@ class VehiclesCustomersView:
 
         try:
             cursor.execute("""
-                SELECT placa, cliente_id
-                FROM vehiculos
-                WHERE id = ?
-            """, (vehicle_id,))
+                SELECT Placa, Cliente
+                FROM VEHICULO
+                WHERE Vehiculo = ? AND Estado = ?
+            """, (vehicle_id, ESTADO_GENERAL_ACTIVO))
             row = cursor.fetchone()
 
             if not row:
                 messagebox.showerror("Error", "No se encontró el vehículo.")
                 return
 
-            placa = row[0]
-            cliente_id = row[1]
+            placa = row["Placa"]
+            cliente_id = row["Cliente"]
 
             cursor.execute("""
                 SELECT COUNT(*)
-                FROM operaciones
-                WHERE vehiculo_id = ? AND estado = 'activo'
-            """, (vehicle_id,))
+                FROM OPERACION
+                WHERE Vehiculo = ? AND Estado = ?
+            """, (vehicle_id, ESTADO_OPERACION_ACTIVO))
             active_operations = cursor.fetchone()[0]
 
             if active_operations > 0:
@@ -320,36 +367,91 @@ class VehiclesCustomersView:
                 return
 
             cursor.execute("""
-                DELETE FROM vehiculos
-                WHERE id = ?
-            """, (vehicle_id,))
+                SELECT COUNT(*)
+                FROM CONTRATO
+                WHERE Vehiculo = ? AND Estado = ?
+            """, (vehicle_id, ESTADO_CONTRATO_ACTIVO))
+            active_contracts = cursor.fetchone()[0]
+
+            if active_contracts > 0:
+                messagebox.showwarning(
+                    "No permitido",
+                    "No se puede eliminar el vehículo porque tiene contratos activos."
+                )
+                return
+
+            usr = obtener_usuario_actual_id(self.user_data)
+
+            cursor.execute("""
+                UPDATE VEHICULO
+                SET
+                    Estado = ?,
+                    Cliente = NULL,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Vehiculo = ?
+            """, (ESTADO_GENERAL_INACTIVO, usr, vehicle_id))
 
             if cliente_id:
                 cursor.execute("""
                     SELECT COUNT(*)
-                    FROM vehiculos
-                    WHERE cliente_id = ?
-                """, (cliente_id,))
+                    FROM VEHICULO
+                    WHERE Cliente = ? AND Estado = ?
+                """, (cliente_id, ESTADO_GENERAL_ACTIVO))
                 used_by_other_vehicles = cursor.fetchone()[0]
 
-                if used_by_other_vehicles == 0:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM CONTRATO
+                    WHERE Cliente = ? AND Estado = ?
+                """, (cliente_id, ESTADO_CONTRATO_ACTIVO))
+                active_customer_contracts = cursor.fetchone()[0]
+
+                if used_by_other_vehicles == 0 and active_customer_contracts == 0:
                     cursor.execute("""
-                        DELETE FROM clientes
-                        WHERE id = ?
-                    """, (cliente_id,))
+                        UPDATE CLIENTE
+                        SET
+                            Estado = ?,
+                            Usr = ?,
+                            UsrFecha = date('now','localtime'),
+                            UsrHora = time('now','localtime'),
+                            FechaModificacion = datetime('now','localtime')
+                        WHERE Cliente = ?
+                    """, (ESTADO_GENERAL_INACTIVO, usr, cliente_id))
 
             cursor.execute("""
-                INSERT INTO bitacora (
-                    usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
+                INSERT INTO BITACORA (
+                    Usuario,
+                    Accion,
+                    TablaAfectada,
+                    RegistroAfectado,
+                    Descripcion,
+                    FechaEvento,
+                    Estado,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
             """, (
-                self.user_data["id"],
+                usr,
                 "ELIMINAR_VEHICULO_CLIENTE",
-                "vehiculos",
+                "VEHICULO",
                 vehicle_id,
-                f"Se eliminó el vehículo '{placa}'",
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f"Se inactivó el vehículo '{placa}'",
+                datetime_now_text(),
+                ESTADO_GENERAL_ACTIVO,
+                usr
             ))
 
             conn.commit()
@@ -368,6 +470,14 @@ class VehiclesCustomersView:
             conn.close()
 
 
+# =========================================================
+# FORMULARIO DE VEHÍCULO / CLIENTE
+# =========================================================
+def datetime_now_text():
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 class VehicleCustomerFormWindow:
     def __init__(self, view, current_user, mode="create", vehicle_id=None):
         self.view = view
@@ -377,8 +487,8 @@ class VehicleCustomerFormWindow:
 
         self.window = tk.Toplevel()
         self.window.title("Nuevo vehículo / cliente" if mode == "create" else "Editar vehículo / cliente")
-        self.window.geometry("560x700")
-        self.window.minsize(520, 620)
+        self.window.geometry("620x760")
+        self.window.minsize(560, 660)
         self.window.resizable(True, True)
         self.window.configure(bg="white")
         self.window.grab_set()
@@ -389,10 +499,17 @@ class VehicleCustomerFormWindow:
         self.entry_marca = None
         self.entry_modelo = None
         self.entry_color = None
+        self.entry_anio = None
+        self.entry_chasis = None
+        self.entry_motor = None
+        self.text_obs_vehiculo = None
 
-        self.entry_cliente = None
+        self.entry_nombres = None
+        self.entry_apellidos = None
         self.entry_telefono = None
         self.entry_documento = None
+        self.entry_direccion = None
+        self.entry_correo = None
         self.text_observacion = None
 
         self.loaded_customer_id = None
@@ -450,6 +567,9 @@ class VehicleCustomerFormWindow:
         content = tk.Frame(form, bg="white")
         content.pack(fill="both", expand=True, padx=20)
 
+        # -----------------------------
+        # VEHÍCULO
+        # -----------------------------
         tk.Label(
             content,
             text="Datos del vehículo",
@@ -511,10 +631,29 @@ class VehicleCustomerFormWindow:
         self.entry_modelo = tk.Entry(content, font=("Arial", 11))
         self.entry_modelo.pack(fill="x", pady=(0, 12))
 
-        tk.Label(content, text="Color", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 18))
+        tk.Label(content, text="Color", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
         self.entry_color = tk.Entry(content, font=("Arial", 11))
-        self.entry_color.pack(fill="x", pady=(0, 18))
+        self.entry_color.pack(fill="x", pady=(0, 12))
 
+        tk.Label(content, text="Año", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_anio = tk.Entry(content, font=("Arial", 11))
+        self.entry_anio.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Número de chasis", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_chasis = tk.Entry(content, font=("Arial", 11))
+        self.entry_chasis.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Número de motor", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_motor = tk.Entry(content, font=("Arial", 11))
+        self.entry_motor.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Observación vehículo", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.text_obs_vehiculo = tk.Text(content, font=("Arial", 11), height=3)
+        self.text_obs_vehiculo.pack(fill="x", pady=(0, 18))
+
+        # -----------------------------
+        # CLIENTE
+        # -----------------------------
         tk.Label(
             content,
             text="Datos del cliente (opcionales)",
@@ -523,19 +662,31 @@ class VehicleCustomerFormWindow:
             fg="#111827"
         ).pack(anchor="w", pady=(5, 10))
 
-        tk.Label(content, text="Nombre", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
-        self.entry_cliente = tk.Entry(content, font=("Arial", 11))
-        self.entry_cliente.pack(fill="x", pady=(0, 12))
+        tk.Label(content, text="Nombres", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_nombres = tk.Entry(content, font=("Arial", 11))
+        self.entry_nombres.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Apellidos", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_apellidos = tk.Entry(content, font=("Arial", 11))
+        self.entry_apellidos.pack(fill="x", pady=(0, 12))
 
         tk.Label(content, text="Teléfono", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
         self.entry_telefono = tk.Entry(content, font=("Arial", 11))
         self.entry_telefono.pack(fill="x", pady=(0, 12))
 
-        tk.Label(content, text="Documento", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        tk.Label(content, text="Documento identidad", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
         self.entry_documento = tk.Entry(content, font=("Arial", 11))
         self.entry_documento.pack(fill="x", pady=(0, 12))
 
-        tk.Label(content, text="Observación", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        tk.Label(content, text="Dirección", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_direccion = tk.Entry(content, font=("Arial", 11))
+        self.entry_direccion.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Correo electrónico", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
+        self.entry_correo = tk.Entry(content, font=("Arial", 11))
+        self.entry_correo.pack(fill="x", pady=(0, 12))
+
+        tk.Label(content, text="Observación cliente", font=("Arial", 11, "bold"), bg="white").pack(anchor="w", pady=(0, 5))
         self.text_observacion = tk.Text(content, font=("Arial", 11), height=4)
         self.text_observacion.pack(fill="x", pady=(0, 16))
 
@@ -631,20 +782,27 @@ class VehicleCustomerFormWindow:
 
         cursor.execute("""
             SELECT
-                v.placa,
-                v.tipo_vehiculo,
-                v.marca,
-                v.modelo,
-                v.color,
-                v.cliente_id,
-                c.nombre,
-                c.telefono,
-                c.documento,
-                c.observacion
-            FROM vehiculos v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
-            WHERE v.id = ?
-        """, (self.vehicle_id,))
+                V.Placa,
+                V.TipoVehiculo,
+                V.Marca,
+                V.Modelo,
+                V.Color,
+                V.Anio,
+                V.NumeroChasis,
+                V.NumeroMotor,
+                V.Observacion,
+                V.Cliente,
+                C.Nombres,
+                C.Apellidos,
+                C.Telefono,
+                C.DocumentoIdentidad,
+                C.Direccion,
+                C.CorreoElectronico,
+                C.Observacion
+            FROM VEHICULO V
+            LEFT JOIN CLIENTE C ON V.Cliente = C.Cliente
+            WHERE V.Vehiculo = ? AND V.Estado = ?
+        """, (self.vehicle_id, ESTADO_GENERAL_ACTIVO))
         row = cursor.fetchone()
         conn.close()
 
@@ -653,20 +811,28 @@ class VehicleCustomerFormWindow:
             self.window.destroy()
             return
 
-        numero, letras = self.split_plate(row[0])
+        numero, letras = self.split_plate(row["Placa"])
         self.entry_placa_numero.insert(0, numero)
         self.entry_placa_letras.insert(0, letras)
 
-        self.vehicle_type_var.set(row[1] if row[1] else "auto")
-        self.entry_marca.insert(0, row[2] if row[2] else "")
-        self.entry_modelo.insert(0, row[3] if row[3] else "")
-        self.entry_color.insert(0, row[4] if row[4] else "")
-        self.loaded_customer_id = row[5]
+        self.vehicle_type_var.set(row["TipoVehiculo"] if row["TipoVehiculo"] else "auto")
+        self.entry_marca.insert(0, row["Marca"] if row["Marca"] else "")
+        self.entry_modelo.insert(0, row["Modelo"] if row["Modelo"] else "")
+        self.entry_color.insert(0, row["Color"] if row["Color"] else "")
+        self.entry_anio.insert(0, str(row["Anio"]) if row["Anio"] else "")
+        self.entry_chasis.insert(0, row["NumeroChasis"] if row["NumeroChasis"] else "")
+        self.entry_motor.insert(0, row["NumeroMotor"] if row["NumeroMotor"] else "")
+        self.text_obs_vehiculo.insert("1.0", row["Observacion"] if row["Observacion"] else "")
 
-        self.entry_cliente.insert(0, row[6] if row[6] else "")
-        self.entry_telefono.insert(0, row[7] if row[7] else "")
-        self.entry_documento.insert(0, row[8] if row[8] else "")
-        self.text_observacion.insert("1.0", row[9] if row[9] else "")
+        self.loaded_customer_id = row["Cliente"]
+
+        self.entry_nombres.insert(0, row["Nombres"] if row["Nombres"] else "")
+        self.entry_apellidos.insert(0, row["Apellidos"] if row["Apellidos"] else "")
+        self.entry_telefono.insert(0, row["Telefono"] if row["Telefono"] else "")
+        self.entry_documento.insert(0, row["DocumentoIdentidad"] if row["DocumentoIdentidad"] else "")
+        self.entry_direccion.insert(0, row["Direccion"] if row["Direccion"] else "")
+        self.entry_correo.insert(0, row["CorreoElectronico"] if row["CorreoElectronico"] else "")
+        self.text_observacion.insert("1.0", row["Observacion_1"] if "Observacion_1" in row.keys() else (row[16] if row[16] else ""))
 
     def confirm_save(self):
         confirmed = messagebox.askyesno(
@@ -689,104 +855,219 @@ class VehicleCustomerFormWindow:
         marca = self.entry_marca.get().strip()
         modelo = self.entry_modelo.get().strip()
         color = self.entry_color.get().strip()
+        anio_texto = self.entry_anio.get().strip()
+        numero_chasis = self.entry_chasis.get().strip()
+        numero_motor = self.entry_motor.get().strip()
+        observacion_vehiculo = self.text_obs_vehiculo.get("1.0", "end").strip()
 
-        nombre_cliente = self.entry_cliente.get().strip()
+        nombres = self.entry_nombres.get().strip()
+        apellidos = self.entry_apellidos.get().strip()
         telefono = self.entry_telefono.get().strip()
         documento = self.entry_documento.get().strip()
-        observacion = self.text_observacion.get("1.0", "end").strip()
+        direccion = self.entry_direccion.get().strip()
+        correo = self.entry_correo.get().strip()
+        observacion_cliente = self.text_observacion.get("1.0", "end").strip()
+
+        anio = None
+        if anio_texto:
+            if not anio_texto.isdigit():
+                messagebox.showwarning("Dato inválido", "El año debe contener solo números.")
+                return
+            anio = int(anio_texto)
 
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
+            placa_normalizada = limpiar_placa_para_busqueda(placa)
+            usr = obtener_usuario_actual_id(self.current_user)
+
             if self.mode == "create":
-                cursor.execute(
-                    "SELECT COUNT(*) FROM vehiculos WHERE REPLACE(UPPER(placa), ' ', '') = ?",
-                    (placa.replace(" ", "").upper(),)
-                )
-                if cursor.fetchone()[0] > 0:
-                    messagebox.showwarning("Placa existente", "Ya existe un vehículo con esa placa.")
-                    return
-
-                cliente_id = self.resolve_customer(cursor, nombre_cliente, telefono, documento, observacion)
-
-                cursor.execute("""
-                    INSERT INTO vehiculos (
-                        placa, tipo_vehiculo, marca, modelo, color, cliente_id, fecha_creacion
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    placa,
-                    tipo_vehiculo,
-                    marca if marca else None,
-                    modelo if modelo else None,
-                    color if color else None,
-                    cliente_id,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                ))
-
-                vehicle_id = cursor.lastrowid
-
-                cursor.execute("""
-                    INSERT INTO bitacora (
-                        usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    self.current_user["id"],
-                    "CREAR_VEHICULO_CLIENTE",
-                    "vehiculos",
-                    vehicle_id,
-                    f"Se creó el vehículo '{placa}'",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                ))
-
-            else:
                 cursor.execute("""
                     SELECT COUNT(*)
-                    FROM vehiculos
-                    WHERE REPLACE(UPPER(placa), ' ', '') = ?
-                    AND id != ?
-                """, (placa.replace(" ", "").upper(), self.vehicle_id))
+                    FROM VEHICULO
+                    WHERE REPLACE(REPLACE(UPPER(Placa), ' ', ''), '-', '') = ?
+                      AND Estado = ?
+                """, (placa_normalizada, ESTADO_GENERAL_ACTIVO))
                 if cursor.fetchone()[0] > 0:
                     messagebox.showwarning("Placa existente", "Ya existe un vehículo con esa placa.")
                     return
 
                 cliente_id = self.resolve_customer(
                     cursor,
-                    nombre_cliente,
+                    nombres,
+                    apellidos,
                     telefono,
                     documento,
-                    observacion,
-                    existing_customer_id=self.loaded_customer_id
+                    direccion,
+                    correo,
+                    observacion_cliente
                 )
 
                 cursor.execute("""
-                    UPDATE vehiculos
-                    SET placa = ?, tipo_vehiculo = ?, marca = ?, modelo = ?, color = ?, cliente_id = ?
-                    WHERE id = ?
+                    INSERT INTO VEHICULO (
+                        Cliente,
+                        Placa,
+                        TipoVehiculo,
+                        Marca,
+                        Modelo,
+                        Color,
+                        Anio,
+                        NumeroChasis,
+                        NumeroMotor,
+                        Observacion,
+                        Estado,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
+                    )
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
                 """, (
+                    cliente_id,
                     placa,
                     tipo_vehiculo,
                     marca if marca else None,
                     modelo if modelo else None,
                     color if color else None,
+                    anio,
+                    numero_chasis if numero_chasis else None,
+                    numero_motor if numero_motor else None,
+                    observacion_vehiculo if observacion_vehiculo else None,
+                    ESTADO_GENERAL_ACTIVO,
+                    usr
+                ))
+
+                vehicle_id = cursor.lastrowid
+
+                cursor.execute("""
+                    INSERT INTO BITACORA (
+                        Usuario,
+                        Accion,
+                        TablaAfectada,
+                        RegistroAfectado,
+                        Descripcion,
+                        FechaEvento,
+                        Estado,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
+                    )
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
+                """, (
+                    usr,
+                    "CREAR_VEHICULO_CLIENTE",
+                    "VEHICULO",
+                    vehicle_id,
+                    f"Se creó el vehículo '{placa}'",
+                    datetime_now_text(),
+                    ESTADO_GENERAL_ACTIVO,
+                    usr
+                ))
+
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM VEHICULO
+                    WHERE REPLACE(REPLACE(UPPER(Placa), ' ', ''), '-', '') = ?
+                      AND Vehiculo != ?
+                      AND Estado = ?
+                """, (placa_normalizada, self.vehicle_id, ESTADO_GENERAL_ACTIVO))
+                if cursor.fetchone()[0] > 0:
+                    messagebox.showwarning("Placa existente", "Ya existe un vehículo con esa placa.")
+                    return
+
+                cliente_id = self.resolve_customer(
+                    cursor,
+                    nombres,
+                    apellidos,
+                    telefono,
+                    documento,
+                    direccion,
+                    correo,
+                    observacion_cliente,
+                    existing_customer_id=self.loaded_customer_id
+                )
+
+                cursor.execute("""
+                    UPDATE VEHICULO
+                    SET
+                        Cliente = ?,
+                        Placa = ?,
+                        TipoVehiculo = ?,
+                        Marca = ?,
+                        Modelo = ?,
+                        Color = ?,
+                        Anio = ?,
+                        NumeroChasis = ?,
+                        NumeroMotor = ?,
+                        Observacion = ?,
+                        Usr = ?,
+                        UsrFecha = date('now','localtime'),
+                        UsrHora = time('now','localtime'),
+                        FechaModificacion = datetime('now','localtime')
+                    WHERE Vehiculo = ?
+                """, (
                     cliente_id,
+                    placa,
+                    tipo_vehiculo,
+                    marca if marca else None,
+                    modelo if modelo else None,
+                    color if color else None,
+                    anio,
+                    numero_chasis if numero_chasis else None,
+                    numero_motor if numero_motor else None,
+                    observacion_vehiculo if observacion_vehiculo else None,
+                    usr,
                     self.vehicle_id
                 ))
 
                 cursor.execute("""
-                    INSERT INTO bitacora (
-                        usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
+                    INSERT INTO BITACORA (
+                        Usuario,
+                        Accion,
+                        TablaAfectada,
+                        RegistroAfectado,
+                        Descripcion,
+                        FechaEvento,
+                        Estado,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
                 """, (
-                    self.current_user["id"],
+                    usr,
                     "EDITAR_VEHICULO_CLIENTE",
-                    "vehiculos",
+                    "VEHICULO",
                     self.vehicle_id,
                     f"Se editó el vehículo '{placa}'",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    datetime_now_text(),
+                    ESTADO_GENERAL_ACTIVO,
+                    usr
                 ))
 
             conn.commit()
@@ -801,35 +1082,89 @@ class VehicleCustomerFormWindow:
         finally:
             conn.close()
 
-    def resolve_customer(self, cursor, nombre, telefono, documento, observacion, existing_customer_id=None):
-        has_customer_data = any([nombre, telefono, documento, observacion])
+    def resolve_customer(
+        self,
+        cursor,
+        nombres,
+        apellidos,
+        telefono,
+        documento,
+        direccion,
+        correo,
+        observacion,
+        existing_customer_id=None
+    ):
+        has_customer_data = any([nombres, apellidos, telefono, documento, direccion, correo, observacion])
 
         if not has_customer_data:
             return None
 
+        usr = obtener_usuario_actual_id(self.current_user)
+
         if existing_customer_id:
             cursor.execute("""
-                UPDATE clientes
-                SET nombre = ?, telefono = ?, documento = ?, observacion = ?
-                WHERE id = ?
+                UPDATE CLIENTE
+                SET
+                    Nombres = ?,
+                    Apellidos = ?,
+                    Telefono = ?,
+                    DocumentoIdentidad = ?,
+                    Direccion = ?,
+                    CorreoElectronico = ?,
+                    Observacion = ?,
+                    Estado = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Cliente = ?
             """, (
-                nombre if nombre else None,
+                nombres if nombres else None,
+                apellidos if apellidos else None,
                 telefono if telefono else None,
                 documento if documento else None,
+                direccion if direccion else None,
+                correo if correo else None,
                 observacion if observacion else None,
+                ESTADO_GENERAL_ACTIVO,
+                usr,
                 existing_customer_id
             ))
             return existing_customer_id
 
         cursor.execute("""
-            INSERT INTO clientes (nombre, telefono, documento, observacion, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO CLIENTE (
+                Nombres,
+                Apellidos,
+                Telefono,
+                DocumentoIdentidad,
+                Direccion,
+                CorreoElectronico,
+                Observacion,
+                Estado,
+                Usr,
+                UsrFecha,
+                UsrHora,
+                FechaCreacion,
+                FechaModificacion
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                date('now','localtime'),
+                time('now','localtime'),
+                datetime('now','localtime'),
+                datetime('now','localtime')
+            )
         """, (
-            nombre if nombre else None,
+            nombres if nombres else None,
+            apellidos if apellidos else None,
             telefono if telefono else None,
             documento if documento else None,
+            direccion if direccion else None,
+            correo if correo else None,
             observacion if observacion else None,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ESTADO_GENERAL_ACTIVO,
+            usr
         ))
         return cursor.lastrowid
 

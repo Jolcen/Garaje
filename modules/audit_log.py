@@ -5,6 +5,13 @@ from datetime import datetime
 from database.db import get_connection
 
 
+# =========================================================
+# CATÁLOGOS
+# =========================================================
+ESTADO_INACTIVO = 0
+ESTADO_ACTIVO = 1
+
+
 class AuditLogView:
     def __init__(self, parent, user_data):
         self.parent = parent
@@ -119,32 +126,32 @@ class AuditLogView:
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
         columns = (
-            "id",
-            "usuario",
-            "accion",
-            "tabla_afectada",
-            "registro_id",
-            "descripcion",
-            "fecha_evento"
+            "Bitacora",
+            "UsuarioNombre",
+            "Accion",
+            "TablaAfectada",
+            "RegistroAfectado",
+            "Descripcion",
+            "FechaEvento"
         )
 
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
 
-        self.tree.heading("id", text="ID")
-        self.tree.heading("usuario", text="Usuario")
-        self.tree.heading("accion", text="Acción")
-        self.tree.heading("tabla_afectada", text="Tabla")
-        self.tree.heading("registro_id", text="Registro")
-        self.tree.heading("descripcion", text="Descripción")
-        self.tree.heading("fecha_evento", text="Fecha")
+        self.tree.heading("Bitacora", text="ID")
+        self.tree.heading("UsuarioNombre", text="Usuario")
+        self.tree.heading("Accion", text="Acción")
+        self.tree.heading("TablaAfectada", text="Tabla")
+        self.tree.heading("RegistroAfectado", text="Registro")
+        self.tree.heading("Descripcion", text="Descripción")
+        self.tree.heading("FechaEvento", text="Fecha")
 
-        self.tree.column("id", width=55, anchor="center", stretch=False)
-        self.tree.column("usuario", width=150, anchor="w", stretch=False)
-        self.tree.column("accion", width=180, anchor="center", stretch=False)
-        self.tree.column("tabla_afectada", width=110, anchor="center", stretch=False)
-        self.tree.column("registro_id", width=80, anchor="center", stretch=False)
-        self.tree.column("descripcion", width=420, anchor="w", stretch=False)
-        self.tree.column("fecha_evento", width=160, anchor="center", stretch=False)
+        self.tree.column("Bitacora", width=55, anchor="center", stretch=False)
+        self.tree.column("UsuarioNombre", width=150, anchor="w", stretch=False)
+        self.tree.column("Accion", width=180, anchor="center", stretch=False)
+        self.tree.column("TablaAfectada", width=110, anchor="center", stretch=False)
+        self.tree.column("RegistroAfectado", width=80, anchor="center", stretch=False)
+        self.tree.column("Descripcion", width=420, anchor="w", stretch=False)
+        self.tree.column("FechaEvento", width=160, anchor="center", stretch=False)
 
         scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         scrollbar_x = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
@@ -201,40 +208,40 @@ class AuditLogView:
 
         query = """
             SELECT
-                b.id,
-                u.nombre,
-                b.accion,
-                b.tabla_afectada,
-                b.registro_id,
-                b.descripcion,
-                b.fecha_evento
-            FROM bitacora b
-            LEFT JOIN usuarios u ON b.usuario_id = u.id
-            WHERE 1=1
+                B.Bitacora,
+                U.Nombre AS UsuarioNombre,
+                B.Accion,
+                B.TablaAfectada,
+                B.RegistroAfectado,
+                B.Descripcion,
+                B.FechaEvento
+            FROM BITACORA B
+            LEFT JOIN USUARIO U ON B.Usuario = U.Usuario
+            WHERE B.Estado = ?
         """
-        params = []
+        params = [ESTADO_ACTIVO]
 
         if search_value:
+            like_value = f"%{search_value}%"
             query += """
                 AND (
-                    UPPER(IFNULL(u.nombre, '')) LIKE ?
-                    OR UPPER(IFNULL(b.accion, '')) LIKE ?
-                    OR UPPER(IFNULL(b.tabla_afectada, '')) LIKE ?
-                    OR UPPER(IFNULL(b.descripcion, '')) LIKE ?
+                    UPPER(IFNULL(U.Nombre, '')) LIKE ?
+                    OR UPPER(IFNULL(B.Accion, '')) LIKE ?
+                    OR UPPER(IFNULL(B.TablaAfectada, '')) LIKE ?
+                    OR UPPER(IFNULL(B.Descripcion, '')) LIKE ?
                 )
             """
-            like_value = f"%{search_value}%"
             params.extend([like_value, like_value, like_value, like_value])
 
         if date_from:
-            query += " AND date(b.fecha_evento) >= date(?)"
+            query += " AND date(B.FechaEvento) >= date(?) "
             params.append(date_from)
 
         if date_to:
-            query += " AND date(b.fecha_evento) <= date(?)"
+            query += " AND date(B.FechaEvento) <= date(?) "
             params.append(date_to)
 
-        query += " ORDER BY b.fecha_evento DESC, b.id DESC"
+        query += " ORDER BY B.FechaEvento DESC, B.Bitacora DESC "
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -245,12 +252,12 @@ class AuditLogView:
                 "",
                 "end",
                 values=(
-                    row[0],
-                    row[1] if row[1] else "-",
-                    row[2] if row[2] else "",
-                    row[3] if row[3] else "",
-                    row[4] if row[4] is not None else "",
-                    row[5] if row[5] else "",
-                    row[6] if row[6] else ""
+                    row["Bitacora"],
+                    row["UsuarioNombre"] if row["UsuarioNombre"] else "-",
+                    row["Accion"] if row["Accion"] else "",
+                    row["TablaAfectada"] if row["TablaAfectada"] else "",
+                    row["RegistroAfectado"] if row["RegistroAfectado"] is not None else "",
+                    row["Descripcion"] if row["Descripcion"] else "",
+                    row["FechaEvento"] if row["FechaEvento"] else ""
                 )
             )

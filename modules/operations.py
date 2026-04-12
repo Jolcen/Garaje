@@ -1,11 +1,101 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
-import math
+from datetime import datetime, time
 
 from database.db import get_connection
+from utils.printer import imprimir_ticket
 
 
+# =========================================================
+# CATÁLOGOS
+# =========================================================
+ESTADO_GENERAL_ACTIVO = 1
+ESTADO_GENERAL_INACTIVO = 0
+
+ROL_ADMIN = 1
+ROL_EMPLEADO = 2
+
+TIPO_TARIFA_ESCALONADA = 1
+TIPO_TARIFA_NOCTURNA = 2
+
+TIPO_DIA_LUNES_VIERNES = 1
+TIPO_DIA_SABADO = 2
+TIPO_DIA_NOCTURNA = 3
+
+METODO_PAGO_EFECTIVO = 1
+METODO_PAGO_QR = 2
+
+ESTADO_CONTRATO_ACTIVO = 1
+
+ESTADO_OPERACION_ACTIVO = 1
+ESTADO_OPERACION_FINALIZADO = 2
+ESTADO_OPERACION_CANCELADO = 3
+
+TIPO_OPERACION_NORMAL = 1
+TIPO_OPERACION_CONTRATO = 2
+
+ESTADO_OPERACION_SERVICIO_PENDIENTE = 1
+ESTADO_OPERACION_SERVICIO_EN_PROCESO = 2
+ESTADO_OPERACION_SERVICIO_REALIZADO = 3
+ESTADO_OPERACION_SERVICIO_CANCELADO = 4
+
+
+# =========================================================
+# UTILIDADES
+# =========================================================
+def ahora_texto():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def obtener_usuario_actual_id(user_data):
+    if not user_data:
+        return 0
+    return user_data.get("Usuario") or user_data.get("id") or 0
+
+
+def limpiar_placa_para_busqueda(placa):
+    return placa.replace(" ", "").replace("-", "").upper().strip()
+
+
+def es_sabado(fecha_dt):
+    return fecha_dt.weekday() == 5
+
+
+def franja_nocturna_aplica(fecha_ingreso_dt, fecha_salida_dt):
+    """
+    Aplica nocturna si la hora de salida cae entre 18:00 y 20:00.
+    """
+    hora_salida = fecha_salida_dt.time()
+    return time(18, 0, 0) <= hora_salida <= time(20, 0, 0)
+
+
+def nombre_tipo_operacion(tipo_operacion):
+    if tipo_operacion == TIPO_OPERACION_CONTRATO:
+        return "Contrato"
+    return "Normal"
+
+
+def nombre_estado_operacion(estado):
+    if estado == ESTADO_OPERACION_ACTIVO:
+        return "Activo"
+    if estado == ESTADO_OPERACION_FINALIZADO:
+        return "Finalizado"
+    if estado == ESTADO_OPERACION_CANCELADO:
+        return "Cancelado"
+    return "N/D"
+
+
+def nombre_metodo_pago(metodo):
+    if metodo == METODO_PAGO_EFECTIVO:
+        return "Efectivo"
+    if metodo == METODO_PAGO_QR:
+        return "QR"
+    return "N/D"
+
+
+# =========================================================
+# VISTA PRINCIPAL
+# =========================================================
 class OperationsView:
     def __init__(self, parent, user_data):
         self.parent = parent
@@ -84,28 +174,40 @@ class OperationsView:
         table_frame = tk.Frame(self.parent, bg="white")
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
-        columns = ("id", "codigo_retiro", "placa", "tipo", "ingreso", "servicios", "estado", "acciones")
+        columns = (
+            "Operacion",
+            "CodigoRetiro",
+            "Placa",
+            "TipoVehiculo",
+            "FechaIngreso",
+            "TipoOperacion",
+            "Servicios",
+            "Estado",
+            "Acciones",
+        )
 
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
         self.tree.pack(fill="both", expand=True, side="left")
 
-        self.tree.heading("id", text="ID")
-        self.tree.heading("codigo_retiro", text="Código retiro")
-        self.tree.heading("placa", text="Placa")
-        self.tree.heading("tipo", text="Tipo")
-        self.tree.heading("ingreso", text="Ingreso")
-        self.tree.heading("servicios", text="Servicios")
-        self.tree.heading("estado", text="Estado")
-        self.tree.heading("acciones", text="Acciones")
+        self.tree.heading("Operacion", text="ID")
+        self.tree.heading("CodigoRetiro", text="Código retiro")
+        self.tree.heading("Placa", text="Placa")
+        self.tree.heading("TipoVehiculo", text="Tipo")
+        self.tree.heading("FechaIngreso", text="Ingreso")
+        self.tree.heading("TipoOperacion", text="Modalidad")
+        self.tree.heading("Servicios", text="Servicios")
+        self.tree.heading("Estado", text="Estado")
+        self.tree.heading("Acciones", text="Acciones")
 
-        self.tree.column("id", width=60, anchor="center")
-        self.tree.column("codigo_retiro", width=110, anchor="center")
-        self.tree.column("placa", width=110, anchor="center")
-        self.tree.column("tipo", width=90, anchor="center")
-        self.tree.column("ingreso", width=150, anchor="center")
-        self.tree.column("servicios", width=280, anchor="w")
-        self.tree.column("estado", width=90, anchor="center")
-        self.tree.column("acciones", width=110, anchor="center")
+        self.tree.column("Operacion", width=60, anchor="center")
+        self.tree.column("CodigoRetiro", width=110, anchor="center")
+        self.tree.column("Placa", width=110, anchor="center")
+        self.tree.column("TipoVehiculo", width=90, anchor="center")
+        self.tree.column("FechaIngreso", width=150, anchor="center")
+        self.tree.column("TipoOperacion", width=100, anchor="center")
+        self.tree.column("Servicios", width=250, anchor="w")
+        self.tree.column("Estado", width=90, anchor="center")
+        self.tree.column("Acciones", width=110, anchor="center")
 
         scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         scrollbar_y.pack(side="right", fill="y")
@@ -131,53 +233,56 @@ class OperationsView:
         cursor = conn.cursor()
 
         query = """
-            SELECT 
-                o.id,
-                o.codigo_retiro,
-                v.placa,
-                v.tipo_vehiculo,
-                o.fecha_ingreso,
-                o.estado
-            FROM operaciones o
-            INNER JOIN vehiculos v ON o.vehiculo_id = v.id
-            WHERE o.estado = 'activo'
+            SELECT
+                O.Operacion,
+                O.CodigoRetiro,
+                V.Placa,
+                V.TipoVehiculo,
+                O.FechaIngreso,
+                O.TipoOperacion,
+                O.Estado
+            FROM OPERACION O
+            INNER JOIN VEHICULO V ON O.Vehiculo = V.Vehiculo
+            WHERE O.Estado = ?
         """
-        params = []
+        params = [ESTADO_OPERACION_ACTIVO]
 
         if placa_filter:
-            query += " AND REPLACE(UPPER(v.placa), ' ', '') LIKE ?"
-            params.append(f"%{placa_filter.replace(' ', '')}%")
+            query += " AND REPLACE(REPLACE(UPPER(V.Placa), ' ', ''), '-', '') LIKE ? "
+            params.append(f"%{limpiar_placa_para_busqueda(placa_filter)}%")
 
         if codigo_filter:
-            query += " AND o.codigo_retiro LIKE ?"
+            query += " AND O.CodigoRetiro LIKE ? "
             params.append(f"%{codigo_filter}%")
 
-        query += " ORDER BY o.fecha_ingreso DESC"
+        query += " ORDER BY O.FechaIngreso DESC "
 
         cursor.execute(query, params)
         operations = cursor.fetchall()
 
         for operation in operations:
-            operation_id = operation[0]
-            codigo_retiro = operation[1]
-            placa = operation[2]
-            tipo_vehiculo = operation[3]
-            fecha_ingreso = operation[4]
-            estado = operation[5]
+            operacion_id = operation["Operacion"]
+            codigo_retiro = operation["CodigoRetiro"]
+            placa = operation["Placa"]
+            tipo_vehiculo = operation["TipoVehiculo"]
+            fecha_ingreso = operation["FechaIngreso"]
+            tipo_operacion = operation["TipoOperacion"]
+            estado = operation["Estado"]
 
-            servicios = self.get_operation_services(operation_id, cursor)
+            servicios = self.get_operation_services(operacion_id, cursor)
 
             self.tree.insert(
                 "",
                 "end",
                 values=(
-                    operation_id,
+                    operacion_id,
                     codigo_retiro,
                     placa,
                     tipo_vehiculo,
                     fecha_ingreso,
+                    nombre_tipo_operacion(tipo_operacion),
                     servicios,
-                    estado,
+                    nombre_estado_operacion(estado),
                     "Doble clic"
                 )
             )
@@ -186,15 +291,16 @@ class OperationsView:
 
     def get_operation_services(self, operation_id, cursor):
         cursor.execute("""
-            SELECT s.nombre
-            FROM operacion_servicios os
-            INNER JOIN servicios s ON os.servicio_id = s.id
-            WHERE os.operacion_id = ? AND os.estado != 'cancelado'
-            ORDER BY s.nombre ASC
-        """, (operation_id,))
+            SELECT S.Nombre
+            FROM OPERACIONSERVICIO OS
+            INNER JOIN SERVICIO S ON OS.Servicio = S.Servicio
+            WHERE OS.Operacion = ?
+              AND OS.Estado != ?
+            ORDER BY S.Nombre ASC
+        """, (operation_id, ESTADO_OPERACION_SERVICIO_CANCELADO))
         rows = cursor.fetchall()
 
-        service_names = [row[0] for row in rows]
+        service_names = [row["Nombre"] for row in rows]
 
         if not service_names:
             return "Parqueo"
@@ -217,7 +323,7 @@ class OperationsView:
 
         action_window = tk.Toplevel(self.parent)
         action_window.title("Acciones")
-        action_window.geometry("340x280")
+        action_window.geometry("340x360")
         action_window.resizable(False, False)
         action_window.configure(bg="white")
         action_window.grab_set()
@@ -266,6 +372,19 @@ class OperationsView:
 
         tk.Button(
             action_window,
+            text="Reimprimir ticket",
+            font=("Arial", 11, "bold"),
+            width=18,
+            bg="#2563eb",
+            fg="white",
+            bd=0,
+            relief="flat",
+            cursor="hand2",
+            command=lambda: self.reprint_ticket(operation_id)
+        ).pack(pady=6)
+
+        tk.Button(
+            action_window,
             text="Cancelar operación",
             font=("Arial", 11, "bold"),
             width=18,
@@ -308,7 +427,61 @@ class OperationsView:
             action_window.destroy()
         ChargeOperationWindow(self, self.user_data, operation_id).run()
 
+    def reprint_ticket(self, operation_id):
+        conn = get_connection()
+        cursor = conn.cursor()
 
+        try:
+            datos = self.get_operation_ticket_data(cursor, operation_id)
+
+            if not datos:
+                messagebox.showwarning("No encontrado", "No se encontró la operación para reimprimir.")
+                return
+
+            fecha_dt = datetime.strptime(datos["FechaIngreso"], "%Y-%m-%d %H:%M:%S")
+            fecha_ticket = fecha_dt.strftime("%d/%m/%Y")
+            hora_ticket = fecha_dt.strftime("%H:%M")
+
+            imprimir_ticket(
+                codigo=datos["CodigoRetiro"],
+                placa=datos["Placa"],
+                fecha=fecha_ticket,
+                hora_ingreso=hora_ticket
+            )
+
+            messagebox.showinfo(
+                "Ticket reimpreso",
+                f"Se reimprimió correctamente el ticket.\n\nCódigo: {datos['CodigoRetiro']}"
+            )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo reimprimir el ticket.\n{str(e)}"
+            )
+
+        finally:
+            conn.close()
+
+    def get_operation_ticket_data(self, cursor, operation_id):
+        cursor.execute("""
+            SELECT
+                O.Operacion,
+                O.CodigoRetiro,
+                O.FechaIngreso,
+                V.Placa
+            FROM OPERACION O
+            INNER JOIN VEHICULO V ON O.Vehiculo = V.Vehiculo
+            WHERE O.Operacion = ?
+            LIMIT 1
+        """, (operation_id,))
+
+        return cursor.fetchone()
+
+
+# =========================================================
+# FORMULARIO DE OPERACIÓN
+# =========================================================
 class OperationFormWindow:
     def __init__(self, operations_view, user_data, mode="create", operation_id=None):
         self.operations_view = operations_view
@@ -318,7 +491,7 @@ class OperationFormWindow:
 
         self.window = tk.Toplevel()
         self.window.title("Nueva operación" if mode == "create" else "Editar operación")
-        self.window.geometry("560x700")
+        self.window.geometry("560x720")
         self.window.minsize(520, 620)
         self.window.resizable(True, True)
         self.window.configure(bg="white")
@@ -333,6 +506,7 @@ class OperationFormWindow:
         self.services_data = []
         self.loaded_vehicle_id = None
         self.loaded_customer_id = None
+        self.loaded_contract_id = None
 
         self.build_ui()
 
@@ -461,10 +635,10 @@ class OperationFormWindow:
         else:
             for service in self.services_data:
                 var = tk.BooleanVar(value=False)
-                self.service_vars[service["id"]] = var
+                self.service_vars[service["Servicio"]] = var
                 tk.Checkbutton(
                     services_frame,
-                    text=f"{service['nombre']} (Bs {service['precio']:.2f})",
+                    text=f"{service['Nombre']} (Bs {float(service['Precio']):.2f})",
                     variable=var,
                     bg="white",
                     font=("Arial", 11)
@@ -564,18 +738,15 @@ class OperationFormWindow:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, nombre, precio
-            FROM servicios
-            WHERE estado = 'activo'
-            ORDER BY nombre ASC
-        """)
+            SELECT Servicio, Nombre, Precio
+            FROM SERVICIO
+            WHERE Estado = ?
+            ORDER BY Nombre ASC
+        """, (ESTADO_GENERAL_ACTIVO,))
         rows = cursor.fetchall()
         conn.close()
 
-        self.services_data = [
-            {"id": row[0], "nombre": row[1], "precio": float(row[2])}
-            for row in rows
-        ]
+        self.services_data = rows
 
     def load_data(self):
         conn = get_connection()
@@ -583,18 +754,19 @@ class OperationFormWindow:
 
         cursor.execute("""
             SELECT
-                o.id,
-                o.vehiculo_id,
-                o.cliente_id,
-                o.observaciones,
-                v.placa,
-                v.tipo_vehiculo,
-                c.nombre
-            FROM operaciones o
-            INNER JOIN vehiculos v ON o.vehiculo_id = v.id
-            LEFT JOIN clientes c ON o.cliente_id = c.id
-            WHERE o.id = ? AND o.estado = 'activo'
-        """, (self.operation_id,))
+                O.Operacion,
+                O.Vehiculo,
+                O.Cliente,
+                O.Contrato,
+                O.Observacion,
+                V.Placa,
+                V.TipoVehiculo,
+                CL.Nombres
+            FROM OPERACION O
+            INNER JOIN VEHICULO V ON O.Vehiculo = V.Vehiculo
+            LEFT JOIN CLIENTE CL ON O.Cliente = CL.Cliente
+            WHERE O.Operacion = ? AND O.Estado = ?
+        """, (self.operation_id, ESTADO_OPERACION_ACTIVO))
         row = cursor.fetchone()
 
         if not row:
@@ -603,22 +775,23 @@ class OperationFormWindow:
             self.window.destroy()
             return
 
-        self.loaded_vehicle_id = row[1]
-        self.loaded_customer_id = row[2]
+        self.loaded_vehicle_id = row["Vehiculo"]
+        self.loaded_customer_id = row["Cliente"]
+        self.loaded_contract_id = row["Contrato"]
 
-        numero, letras = self.split_plate(row[4])
+        numero, letras = self.split_plate(row["Placa"])
         self.entry_placa_numero.insert(0, numero)
         self.entry_placa_letras.insert(0, letras)
-        self.vehicle_type_var.set(row[5] if row[5] else "auto")
-        self.entry_cliente.insert(0, row[6] if row[6] else "")
-        self.text_observaciones.insert("1.0", row[3] if row[3] else "")
+        self.vehicle_type_var.set(row["TipoVehiculo"] if row["TipoVehiculo"] else "auto")
+        self.entry_cliente.insert(0, row["Nombres"] if row["Nombres"] else "")
+        self.text_observaciones.insert("1.0", row["Observacion"] if row["Observacion"] else "")
 
         cursor.execute("""
-            SELECT servicio_id
-            FROM operacion_servicios
-            WHERE operacion_id = ? AND estado != 'cancelado'
-        """, (self.operation_id,))
-        selected_ids = {r[0] for r in cursor.fetchall()}
+            SELECT Servicio
+            FROM OPERACIONSERVICIO
+            WHERE Operacion = ? AND Estado != ?
+        """, (self.operation_id, ESTADO_OPERACION_SERVICIO_CANCELADO))
+        selected_ids = {r["Servicio"] for r in cursor.fetchall()}
 
         for service_id, var in self.service_vars.items():
             var.set(service_id in selected_ids)
@@ -640,62 +813,109 @@ class OperationFormWindow:
         cursor = conn.cursor()
 
         try:
+            usr = obtener_usuario_actual_id(self.user_data)
+
             if self.mode == "create":
                 vehiculo_id = self.get_or_create_vehicle(cursor, placa, tipo_vehiculo)
                 cliente_id = self.get_or_create_customer_by_name(cursor, cliente_nombre)
-                tarifa_id = self.get_active_rate(cursor, tipo_vehiculo)
+                contrato_id = self.get_active_contract_for_vehicle(cursor, vehiculo_id)
+
+                tipo_operacion = TIPO_OPERACION_CONTRATO if contrato_id else TIPO_OPERACION_NORMAL
+                tarifa_id = self.get_main_tariff_for_vehicle(cursor, tipo_vehiculo)
+
                 codigo_operacion = self.generate_operation_code(cursor)
                 codigo_retiro = self.generate_pickup_code(cursor)
-                fecha_ingreso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                fecha_ingreso = ahora_texto()
 
                 cursor.execute("""
-                    INSERT INTO operaciones (
-                        codigo_operacion,
-                        vehiculo_id,
-                        cliente_id,
-                        usuario_ingreso_id,
-                        tarifa_id,
-                        fecha_ingreso,
-                        estado,
-                        codigo_retiro,
-                        observaciones
+                    INSERT INTO OPERACION (
+                        CodigoOperacion,
+                        Vehiculo,
+                        Cliente,
+                        Tarifa,
+                        Contrato,
+                        UsuarioIngreso,
+                        FechaIngreso,
+                        TipoOperacion,
+                        Estado,
+                        CodigoRetiro,
+                        Observacion,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
                 """, (
                     codigo_operacion,
                     vehiculo_id,
                     cliente_id,
-                    self.user_data["id"],
                     tarifa_id,
+                    contrato_id,
+                    usr,
                     fecha_ingreso,
-                    "activo",
+                    tipo_operacion,
+                    ESTADO_OPERACION_ACTIVO,
                     codigo_retiro,
-                    observaciones if observaciones else None
+                    observaciones if observaciones else None,
+                    usr
                 ))
 
                 operacion_id = cursor.lastrowid
                 self.replace_services(cursor, operacion_id)
 
                 cursor.execute("""
-                    INSERT INTO bitacora (
-                        usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
+                    INSERT INTO BITACORA (
+                        Usuario,
+                        Accion,
+                        TablaAfectada,
+                        RegistroAfectado,
+                        Descripcion,
+                        FechaEvento,
+                        Estado,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
                 """, (
-                    self.user_data["id"],
+                    usr,
                     "CREAR_OPERACION",
-                    "operaciones",
+                    "OPERACION",
                     operacion_id,
                     f"Se creó la operación {operacion_id} para placa {placa} con código de retiro {codigo_retiro}",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    fecha_ingreso,
+                    ESTADO_GENERAL_ACTIVO,
+                    usr
                 ))
 
                 conn.commit()
 
-                messagebox.showinfo(
-                    "Operación registrada",
-                    f"Operación creada correctamente.\n\nCódigo de retiro: {codigo_retiro}"
-                )
+                if contrato_id:
+                    messagebox.showinfo(
+                        "Operación registrada",
+                        f"Operación creada correctamente.\n\nCódigo de retiro: {codigo_retiro}\nVehículo con contrato activo."
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Operación registrada",
+                        f"Operación creada correctamente.\n\nCódigo de retiro: {codigo_retiro}"
+                    )
 
             else:
                 cliente_id = self.get_or_create_customer_by_name(
@@ -704,39 +924,78 @@ class OperationFormWindow:
                     existing_customer_id=self.loaded_customer_id
                 )
 
-                tarifa_id = self.get_active_rate(cursor, tipo_vehiculo)
+                contrato_id = self.get_active_contract_for_vehicle(cursor, self.loaded_vehicle_id)
+                tipo_operacion = TIPO_OPERACION_CONTRATO if contrato_id else TIPO_OPERACION_NORMAL
+                tarifa_id = self.get_main_tariff_for_vehicle(cursor, tipo_vehiculo)
 
                 cursor.execute("""
-                    UPDATE vehiculos
-                    SET placa = ?, tipo_vehiculo = ?
-                    WHERE id = ?
-                """, (placa, tipo_vehiculo, self.loaded_vehicle_id))
+                    UPDATE VEHICULO
+                    SET
+                        Placa = ?,
+                        TipoVehiculo = ?,
+                        Usr = ?,
+                        UsrFecha = date('now','localtime'),
+                        UsrHora = time('now','localtime'),
+                        FechaModificacion = datetime('now','localtime')
+                    WHERE Vehiculo = ?
+                """, (placa, tipo_vehiculo, usr, self.loaded_vehicle_id))
 
                 cursor.execute("""
-                    UPDATE operaciones
-                    SET cliente_id = ?, tarifa_id = ?, observaciones = ?
-                    WHERE id = ?
+                    UPDATE OPERACION
+                    SET
+                        Cliente = ?,
+                        Tarifa = ?,
+                        Contrato = ?,
+                        TipoOperacion = ?,
+                        Observacion = ?,
+                        Usr = ?,
+                        UsrFecha = date('now','localtime'),
+                        UsrHora = time('now','localtime'),
+                        FechaModificacion = datetime('now','localtime')
+                    WHERE Operacion = ?
                 """, (
                     cliente_id,
                     tarifa_id,
+                    contrato_id,
+                    tipo_operacion,
                     observaciones if observaciones else None,
+                    usr,
                     self.operation_id
                 ))
 
                 self.replace_services(cursor, self.operation_id)
 
                 cursor.execute("""
-                    INSERT INTO bitacora (
-                        usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
+                    INSERT INTO BITACORA (
+                        Usuario,
+                        Accion,
+                        TablaAfectada,
+                        RegistroAfectado,
+                        Descripcion,
+                        FechaEvento,
+                        Estado,
+                        Usr,
+                        UsrFecha,
+                        UsrHora,
+                        FechaCreacion,
+                        FechaModificacion
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        date('now','localtime'),
+                        time('now','localtime'),
+                        datetime('now','localtime'),
+                        datetime('now','localtime')
+                    )
                 """, (
-                    self.user_data["id"],
+                    usr,
                     "EDITAR_OPERACION",
-                    "operaciones",
+                    "OPERACION",
                     self.operation_id,
                     f"Se editó la operación {self.operation_id} para placa {placa}",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ahora_texto(),
+                    ESTADO_GENERAL_ACTIVO,
+                    usr
                 ))
 
                 conn.commit()
@@ -753,107 +1012,212 @@ class OperationFormWindow:
             conn.close()
 
     def get_or_create_vehicle(self, cursor, placa, tipo_vehiculo):
-        cursor.execute("SELECT id FROM vehiculos WHERE REPLACE(UPPER(placa), ' ', '') = ?", (placa.replace(" ", "").upper(),))
+        cursor.execute("""
+            SELECT Vehiculo
+            FROM VEHICULO
+            WHERE REPLACE(REPLACE(UPPER(Placa), ' ', ''), '-', '') = ?
+        """, (limpiar_placa_para_busqueda(placa),))
         row = cursor.fetchone()
+
+        usr = obtener_usuario_actual_id(self.user_data)
 
         if row:
             cursor.execute("""
-                UPDATE vehiculos
-                SET tipo_vehiculo = ?, placa = ?
-                WHERE id = ?
-            """, (tipo_vehiculo, placa, row[0]))
-            return row[0]
+                UPDATE VEHICULO
+                SET
+                    TipoVehiculo = ?,
+                    Placa = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Vehiculo = ?
+            """, (tipo_vehiculo, placa, usr, row["Vehiculo"]))
+            return row["Vehiculo"]
 
-        fecha_creacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
-            INSERT INTO vehiculos (placa, tipo_vehiculo, fecha_creacion)
-            VALUES (?, ?, ?)
-        """, (placa, tipo_vehiculo, fecha_creacion))
+            INSERT INTO VEHICULO (
+                Placa,
+                TipoVehiculo,
+                Estado,
+                Usr,
+                UsrFecha,
+                UsrHora,
+                FechaCreacion,
+                FechaModificacion
+            )
+            VALUES (
+                ?, ?, ?, ?,
+                date('now','localtime'),
+                time('now','localtime'),
+                datetime('now','localtime'),
+                datetime('now','localtime')
+            )
+        """, (
+            placa,
+            tipo_vehiculo,
+            ESTADO_GENERAL_ACTIVO,
+            usr
+        ))
         return cursor.lastrowid
 
     def get_or_create_customer_by_name(self, cursor, nombre, existing_customer_id=None):
         if not nombre:
             return None
 
+        usr = obtener_usuario_actual_id(self.user_data)
+
         if existing_customer_id:
             cursor.execute("""
-                UPDATE clientes
-                SET nombre = ?
-                WHERE id = ?
-            """, (nombre, existing_customer_id))
+                UPDATE CLIENTE
+                SET
+                    Nombres = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Cliente = ?
+            """, (nombre, usr, existing_customer_id))
             return existing_customer_id
 
         cursor.execute("""
-            INSERT INTO clientes (nombre, fecha_creacion)
-            VALUES (?, ?)
-        """, (nombre, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            INSERT INTO CLIENTE (
+                Nombres,
+                Estado,
+                Usr,
+                UsrFecha,
+                UsrHora,
+                FechaCreacion,
+                FechaModificacion
+            )
+            VALUES (
+                ?, ?, ?,
+                date('now','localtime'),
+                time('now','localtime'),
+                datetime('now','localtime'),
+                datetime('now','localtime')
+            )
+        """, (
+            nombre,
+            ESTADO_GENERAL_ACTIVO,
+            usr
+        ))
         return cursor.lastrowid
 
-    def get_active_rate(self, cursor, tipo_vehiculo):
+    def get_main_tariff_for_vehicle(self, cursor, tipo_vehiculo):
         cursor.execute("""
-            SELECT id
-            FROM tarifas
-            WHERE estado = 'activa' AND tipo_vehiculo = ? AND tipo_cobro = 'hora'
-            ORDER BY id ASC
+            SELECT Tarifa
+            FROM TARIFA
+            WHERE Estado = ?
+              AND TipoVehiculo = ?
+              AND TipoTarifa = ?
+            ORDER BY Tarifa ASC
             LIMIT 1
-        """, (tipo_vehiculo,))
+        """, (
+            ESTADO_GENERAL_ACTIVO,
+            tipo_vehiculo,
+            TIPO_TARIFA_ESCALONADA
+        ))
         row = cursor.fetchone()
 
         if not row:
-            raise Exception(f"No existe una tarifa activa para {tipo_vehiculo} por hora.")
+            raise Exception(f"No existe una tarifa escalonada activa para {tipo_vehiculo}.")
 
-        return row[0]
+        return row["Tarifa"]
+
+    def get_active_contract_for_vehicle(self, cursor, vehiculo_id):
+        hoy = datetime.now().strftime("%Y-%m-%d")
+
+        cursor.execute("""
+            SELECT Contrato
+            FROM CONTRATO
+            WHERE Vehiculo = ?
+              AND Estado = ?
+              AND FechaInicio <= ?
+              AND FechaFin >= ?
+            ORDER BY Contrato DESC
+            LIMIT 1
+        """, (
+            vehiculo_id,
+            ESTADO_CONTRATO_ACTIVO,
+            hoy,
+            hoy
+        ))
+        row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        return row["Contrato"]
 
     def replace_services(self, cursor, operacion_id):
-        cursor.execute("DELETE FROM operacion_servicios WHERE operacion_id = ?", (operacion_id,))
+        cursor.execute("DELETE FROM OPERACIONSERVICIO WHERE Operacion = ?", (operacion_id,))
 
         selected_service_ids = [
             service_id for service_id, var in self.service_vars.items() if var.get()
         ]
 
+        usr = obtener_usuario_actual_id(self.user_data)
+
         for service_id in selected_service_ids:
             cursor.execute("""
-                SELECT precio
-                FROM servicios
-                WHERE id = ? AND estado = 'activo'
-            """, (service_id,))
+                SELECT Precio
+                FROM SERVICIO
+                WHERE Servicio = ? AND Estado = ?
+            """, (service_id, ESTADO_GENERAL_ACTIVO))
             row = cursor.fetchone()
 
             if not row:
                 continue
 
-            precio = float(row[0])
+            precio = float(row["Precio"])
 
             cursor.execute("""
-                INSERT INTO operacion_servicios (
-                    operacion_id,
-                    servicio_id,
-                    cantidad,
-                    precio_unitario,
-                    subtotal,
-                    estado
+                INSERT INTO OPERACIONSERVICIO (
+                    Operacion,
+                    Servicio,
+                    Cantidad,
+                    PrecioUnitario,
+                    Subtotal,
+                    Estado,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
             """, (
                 operacion_id,
                 service_id,
                 1,
                 precio,
                 precio,
-                "pendiente"
+                ESTADO_OPERACION_SERVICIO_PENDIENTE,
+                usr
             ))
 
     def generate_operation_code(self, cursor):
         while True:
             code = "OP-" + datetime.now().strftime("%Y%m%d%H%M%S")
-            cursor.execute("SELECT 1 FROM operaciones WHERE codigo_operacion = ?", (code,))
+            cursor.execute("SELECT 1 FROM OPERACION WHERE CodigoOperacion = ?", (code,))
             if not cursor.fetchone():
                 return code
 
     def generate_pickup_code(self, cursor):
         while True:
             code = datetime.now().strftime("%H%M%S")
-            cursor.execute("SELECT 1 FROM operaciones WHERE codigo_retiro = ? AND estado = 'activo'", (code,))
+            cursor.execute("""
+                SELECT 1
+                FROM OPERACION
+                WHERE CodigoRetiro = ? AND Estado = ?
+            """, (code, ESTADO_OPERACION_ACTIVO))
             if not cursor.fetchone():
                 return code
 
@@ -861,6 +1225,9 @@ class OperationFormWindow:
         pass
 
 
+# =========================================================
+# CANCELAR OPERACIÓN
+# =========================================================
 class CancelOperationWindow:
     def __init__(self, operations_view, user_data, operation_id):
         self.operations_view = operations_view
@@ -939,29 +1306,60 @@ class CancelOperationWindow:
         cursor = conn.cursor()
 
         try:
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now_str = ahora_texto()
+            usr = obtener_usuario_actual_id(self.user_data)
 
             cursor.execute("""
-                UPDATE operaciones
+                UPDATE OPERACION
                 SET
-                    estado = 'cancelado',
-                    motivo_cancelacion = ?,
-                    fecha_salida = ?
-                WHERE id = ? AND estado = 'activo'
-            """, (reason, now_str, self.operation_id))
+                    Estado = ?,
+                    MotivoCancelacion = ?,
+                    FechaSalida = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Operacion = ? AND Estado = ?
+            """, (
+                ESTADO_OPERACION_CANCELADO,
+                reason,
+                now_str,
+                usr,
+                self.operation_id,
+                ESTADO_OPERACION_ACTIVO
+            ))
 
             cursor.execute("""
-                INSERT INTO bitacora (
-                    usuario_id, accion, tabla_afectada, registro_id, descripcion, fecha_evento
+                INSERT INTO BITACORA (
+                    Usuario,
+                    Accion,
+                    TablaAfectada,
+                    RegistroAfectado,
+                    Descripcion,
+                    FechaEvento,
+                    Estado,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
             """, (
-                self.user_data["id"],
+                usr,
                 "CANCELAR_OPERACION",
-                "operaciones",
+                "OPERACION",
                 self.operation_id,
                 f"Se canceló la operación {self.operation_id}. Motivo: {reason}",
-                now_str
+                now_str,
+                ESTADO_GENERAL_ACTIVO,
+                usr
             ))
 
             conn.commit()
@@ -980,6 +1378,9 @@ class CancelOperationWindow:
         pass
 
 
+# =========================================================
+# COBRAR OPERACIÓN
+# =========================================================
 class ChargeOperationWindow:
     def __init__(self, operations_view, user_data, operation_id):
         self.operations_view = operations_view
@@ -988,7 +1389,7 @@ class ChargeOperationWindow:
 
         self.window = tk.Toplevel()
         self.window.title("Cobrar operación")
-        self.window.geometry("520x560")
+        self.window.geometry("540x600")
         self.window.minsize(520, 560)
         self.window.resizable(False, False)
         self.window.configure(bg="white")
@@ -996,7 +1397,7 @@ class ChargeOperationWindow:
 
         self.operation_data = None
         self.calculation = None
-        self.method_var = tk.StringVar(value="efectivo")
+        self.method_var = tk.IntVar(value=METODO_PAGO_EFECTIVO)
 
         self.load_operation_data()
         self.build_ui()
@@ -1007,19 +1408,18 @@ class ChargeOperationWindow:
 
         cursor.execute("""
             SELECT
-                o.id,
-                o.codigo_retiro,
-                v.placa,
-                o.fecha_ingreso,
-                o.tarifa_id,
-                t.monto,
-                t.fraccion_minima,
-                t.tolerancia_min
-            FROM operaciones o
-            INNER JOIN vehiculos v ON o.vehiculo_id = v.id
-            INNER JOIN tarifas t ON o.tarifa_id = t.id
-            WHERE o.id = ? AND o.estado = 'activo'
-        """, (self.operation_id,))
+                O.Operacion,
+                O.CodigoRetiro,
+                O.FechaIngreso,
+                O.Tarifa,
+                O.Contrato,
+                O.TipoOperacion,
+                V.Placa,
+                V.TipoVehiculo
+            FROM OPERACION O
+            INNER JOIN VEHICULO V ON O.Vehiculo = V.Vehiculo
+            WHERE O.Operacion = ? AND O.Estado = ?
+        """, (self.operation_id, ESTADO_OPERACION_ACTIVO))
         row = cursor.fetchone()
 
         if not row:
@@ -1027,49 +1427,132 @@ class ChargeOperationWindow:
             raise Exception("La operación no existe o ya no está activa.")
 
         self.operation_data = {
-            "id": row[0],
-            "codigo_retiro": row[1],
-            "placa": row[2],
-            "fecha_ingreso": row[3],
-            "tarifa_id": row[4],
-            "monto_tarifa": float(row[5]),
-            "fraccion_minima": int(row[6]),
-            "tolerancia_min": int(row[7])
+            "Operacion": row["Operacion"],
+            "CodigoRetiro": row["CodigoRetiro"],
+            "FechaIngreso": row["FechaIngreso"],
+            "Tarifa": row["Tarifa"],
+            "Contrato": row["Contrato"],
+            "TipoOperacion": row["TipoOperacion"],
+            "Placa": row["Placa"],
+            "TipoVehiculo": row["TipoVehiculo"],
         }
 
         cursor.execute("""
-            SELECT COALESCE(SUM(subtotal), 0)
-            FROM operacion_servicios
-            WHERE operacion_id = ? AND estado != 'cancelado'
-        """, (self.operation_id,))
-        monto_servicios = float(cursor.fetchone()[0] or 0)
+            SELECT COALESCE(SUM(Subtotal), 0) AS TotalServicios
+            FROM OPERACIONSERVICIO
+            WHERE Operacion = ? AND Estado != ?
+        """, (self.operation_id, ESTADO_OPERACION_SERVICIO_CANCELADO))
+        monto_servicios = float(cursor.fetchone()["TotalServicios"] or 0)
 
         conn.close()
 
-        fecha_ingreso_dt = datetime.strptime(self.operation_data["fecha_ingreso"], "%Y-%m-%d %H:%M:%S")
+        fecha_ingreso_dt = datetime.strptime(self.operation_data["FechaIngreso"], "%Y-%m-%d %H:%M:%S")
         fecha_salida_dt = datetime.now()
-        total_minutes = int((fecha_salida_dt - fecha_ingreso_dt).total_seconds() / 60)
+        total_minutes = max(1, int((fecha_salida_dt - fecha_ingreso_dt).total_seconds() / 60))
 
-        tolerancia = self.operation_data["tolerancia_min"]
-        fraccion = self.operation_data["fraccion_minima"]
-        monto_tarifa = self.operation_data["monto_tarifa"]
+        monto_parqueo = self.calcular_monto_parqueo(
+            tipo_operacion=self.operation_data["TipoOperacion"],
+            tipo_vehiculo=self.operation_data["TipoVehiculo"],
+            minutos_estadia=total_minutes,
+            fecha_ingreso_dt=fecha_ingreso_dt,
+            fecha_salida_dt=fecha_salida_dt
+        )
 
-        if total_minutes <= tolerancia:
-            bloques = 1
-        else:
-            bloques = max(1, math.ceil(total_minutes / fraccion))
-
-        monto_parqueo = bloques * monto_tarifa
         monto_total = monto_parqueo + monto_servicios
 
         self.calculation = {
-            "fecha_salida": fecha_salida_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "minutos_estadia": total_minutes,
-            "bloques": bloques,
-            "monto_parqueo": round(monto_parqueo, 2),
-            "monto_servicios": round(monto_servicios, 2),
-            "monto_total": round(monto_total, 2)
+            "FechaSalida": fecha_salida_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "MinutosEstadia": total_minutes,
+            "MontoParqueo": round(monto_parqueo, 2),
+            "MontoServicios": round(monto_servicios, 2),
+            "MontoTotal": round(monto_total, 2)
         }
+
+    def calcular_monto_parqueo(self, tipo_operacion, tipo_vehiculo, minutos_estadia, fecha_ingreso_dt, fecha_salida_dt):
+        if tipo_operacion == TIPO_OPERACION_CONTRATO:
+            return 0.0
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            tipo_dia = TIPO_DIA_SABADO if es_sabado(fecha_ingreso_dt) else TIPO_DIA_LUNES_VIERNES
+
+            if franja_nocturna_aplica(fecha_ingreso_dt, fecha_salida_dt):
+                cursor.execute("""
+                    SELECT TD.Monto
+                    FROM TARIFA T
+                    INNER JOIN TARIFADETALLE TD ON T.Tarifa = TD.Tarifa
+                    WHERE T.Estado = ?
+                      AND T.TipoVehiculo = ?
+                      AND T.TipoTarifa = ?
+                      AND TD.Estado = ?
+                      AND TD.TipoDia = ?
+                    ORDER BY TD.TarifaDetalle ASC
+                    LIMIT 1
+                """, (
+                    ESTADO_GENERAL_ACTIVO,
+                    tipo_vehiculo,
+                    TIPO_TARIFA_NOCTURNA,
+                    ESTADO_GENERAL_ACTIVO,
+                    TIPO_DIA_NOCTURNA
+                ))
+                row_nocturna = cursor.fetchone()
+                if row_nocturna:
+                    return float(row_nocturna["Monto"])
+
+            cursor.execute("""
+                SELECT TD.Monto
+                FROM TARIFA T
+                INNER JOIN TARIFADETALLE TD ON T.Tarifa = TD.Tarifa
+                WHERE T.Estado = ?
+                  AND T.TipoVehiculo = ?
+                  AND T.TipoTarifa = ?
+                  AND TD.Estado = ?
+                  AND TD.TipoDia = ?
+                  AND ? BETWEEN TD.MinutoInicio AND TD.MinutoFin
+                ORDER BY TD.TarifaDetalle ASC
+                LIMIT 1
+            """, (
+                ESTADO_GENERAL_ACTIVO,
+                tipo_vehiculo,
+                TIPO_TARIFA_ESCALONADA,
+                ESTADO_GENERAL_ACTIVO,
+                tipo_dia,
+                minutos_estadia
+            ))
+            row = cursor.fetchone()
+
+            if row:
+                return float(row["Monto"])
+
+            cursor.execute("""
+                SELECT TD.Monto
+                FROM TARIFA T
+                INNER JOIN TARIFADETALLE TD ON T.Tarifa = TD.Tarifa
+                WHERE T.Estado = ?
+                  AND T.TipoVehiculo = ?
+                  AND T.TipoTarifa = ?
+                  AND TD.Estado = ?
+                  AND TD.TipoDia = ?
+                ORDER BY TD.MinutoFin DESC
+                LIMIT 1
+            """, (
+                ESTADO_GENERAL_ACTIVO,
+                tipo_vehiculo,
+                TIPO_TARIFA_ESCALONADA,
+                ESTADO_GENERAL_ACTIVO,
+                tipo_dia
+            ))
+            row_ultimo = cursor.fetchone()
+
+            if row_ultimo:
+                return float(row_ultimo["Monto"])
+
+            raise Exception(f"No existe detalle de tarifa configurado para {tipo_vehiculo}.")
+
+        finally:
+            conn.close()
 
     def build_ui(self):
         tk.Label(
@@ -1084,14 +1567,15 @@ class ChargeOperationWindow:
         content_frame.pack(fill="both", expand=True, padx=30)
 
         rows = [
-            ("Código retiro:", self.operation_data["codigo_retiro"]),
-            ("Placa:", self.operation_data["placa"]),
-            ("Ingreso:", self.operation_data["fecha_ingreso"]),
-            ("Salida:", self.calculation["fecha_salida"]),
-            ("Tiempo:", f"{self.calculation['minutos_estadia']} min"),
-            ("Monto parqueo:", f"Bs {self.calculation['monto_parqueo']:.2f}"),
-            ("Monto servicios:", f"Bs {self.calculation['monto_servicios']:.2f}"),
-            ("Total:", f"Bs {self.calculation['monto_total']:.2f}")
+            ("Código retiro:", self.operation_data["CodigoRetiro"]),
+            ("Placa:", self.operation_data["Placa"]),
+            ("Ingreso:", self.operation_data["FechaIngreso"]),
+            ("Salida:", self.calculation["FechaSalida"]),
+            ("Tiempo:", f"{self.calculation['MinutosEstadia']} min"),
+            ("Modalidad:", nombre_tipo_operacion(self.operation_data["TipoOperacion"])),
+            ("Monto parqueo:", f"Bs {self.calculation['MontoParqueo']:.2f}"),
+            ("Monto servicios:", f"Bs {self.calculation['MontoServicios']:.2f}"),
+            ("Total:", f"Bs {self.calculation['MontoTotal']:.2f}")
         ]
 
         for label_text, value_text in rows:
@@ -1127,7 +1611,7 @@ class ChargeOperationWindow:
             bg="white"
         ).pack(anchor="w", pady=(0, 8))
 
-        methods = [("Efectivo", "efectivo"), ("QR", "qr")]
+        methods = [("Efectivo", METODO_PAGO_EFECTIVO), ("QR", METODO_PAGO_QR)]
         for text, value in methods:
             tk.Radiobutton(
                 method_frame,
@@ -1178,63 +1662,99 @@ class ChargeOperationWindow:
         cursor = conn.cursor()
 
         try:
+            usr = obtener_usuario_actual_id(self.user_data)
+
             cursor.execute("""
-                UPDATE operaciones
+                UPDATE OPERACION
                 SET
-                    usuario_salida_id = ?,
-                    fecha_salida = ?,
-                    minutos_estadia = ?,
-                    monto_parqueo = ?,
-                    monto_servicios = ?,
-                    monto_total = ?,
-                    estado = 'finalizado'
-                WHERE id = ?
+                    UsuarioSalida = ?,
+                    FechaSalida = ?,
+                    MinutosEstadia = ?,
+                    MontoParqueo = ?,
+                    MontoServicios = ?,
+                    MontoTotal = ?,
+                    Estado = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Operacion = ?
             """, (
-                self.user_data["id"],
-                self.calculation["fecha_salida"],
-                self.calculation["minutos_estadia"],
-                self.calculation["monto_parqueo"],
-                self.calculation["monto_servicios"],
-                self.calculation["monto_total"],
+                usr,
+                self.calculation["FechaSalida"],
+                self.calculation["MinutosEstadia"],
+                self.calculation["MontoParqueo"],
+                self.calculation["MontoServicios"],
+                self.calculation["MontoTotal"],
+                ESTADO_OPERACION_FINALIZADO,
+                usr,
                 self.operation_id
             ))
 
             cursor.execute("""
-                INSERT INTO pagos (
-                    operacion_id,
-                    usuario_id,
-                    fecha_pago,
-                    metodo_pago,
-                    monto,
-                    observacion
+                INSERT INTO PAGO (
+                    Operacion,
+                    Usuario,
+                    FechaPago,
+                    MetodoPago,
+                    Monto,
+                    Observacion,
+                    Estado,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
             """, (
                 self.operation_id,
-                self.user_data["id"],
-                self.calculation["fecha_salida"],
+                usr,
+                self.calculation["FechaSalida"],
                 self.method_var.get(),
-                self.calculation["monto_total"],
-                f"Cobro registrado desde módulo Operaciones. Código de retiro: {self.operation_data['codigo_retiro']}"
+                self.calculation["MontoTotal"],
+                f"Cobro registrado desde módulo Operaciones. Código de retiro: {self.operation_data['CodigoRetiro']}",
+                ESTADO_GENERAL_ACTIVO,
+                usr
             ))
 
             cursor.execute("""
-                INSERT INTO bitacora (
-                    usuario_id,
-                    accion,
-                    tabla_afectada,
-                    registro_id,
-                    descripcion,
-                    fecha_evento
+                INSERT INTO BITACORA (
+                    Usuario,
+                    Accion,
+                    TablaAfectada,
+                    RegistroAfectado,
+                    Descripcion,
+                    FechaEvento,
+                    Estado,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
             """, (
-                self.user_data["id"],
-                "COBRAR",
-                "operaciones",
+                usr,
+                "COBRAR_OPERACION",
+                "OPERACION",
                 self.operation_id,
-                f"Se cobró la operación {self.operation_id} con código de retiro {self.operation_data['codigo_retiro']} por Bs {self.calculation['monto_total']:.2f}",
-                self.calculation["fecha_salida"]
+                f"Se cobró la operación {self.operation_id} con código de retiro {self.operation_data['CodigoRetiro']} por Bs {self.calculation['MontoTotal']:.2f}",
+                self.calculation["FechaSalida"],
+                ESTADO_GENERAL_ACTIVO,
+                usr
             ))
 
             conn.commit()
@@ -1242,8 +1762,8 @@ class ChargeOperationWindow:
             messagebox.showinfo(
                 "Cobro realizado",
                 f"Operación finalizada correctamente.\n"
-                f"Código de retiro: {self.operation_data['codigo_retiro']}\n"
-                f"Total cobrado: Bs {self.calculation['monto_total']:.2f}"
+                f"Código de retiro: {self.operation_data['CodigoRetiro']}\n"
+                f"Total cobrado: Bs {self.calculation['MontoTotal']:.2f}"
             )
 
             self.window.destroy()

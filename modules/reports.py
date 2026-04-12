@@ -7,6 +7,22 @@ from openpyxl.styles import Font, Alignment
 from database.db import get_connection
 
 
+# =========================================================
+# CATÁLOGOS
+# =========================================================
+ESTADO_OPERACION_FINALIZADO = 2
+ESTADO_OPERACION_SERVICIO_CANCELADO = 4
+
+TIPO_OPERACION_NORMAL = 1
+TIPO_OPERACION_CONTRATO = 2
+
+
+def nombre_tipo_operacion(tipo_operacion):
+    if tipo_operacion == TIPO_OPERACION_CONTRATO:
+        return "Contrato"
+    return "Normal"
+
+
 class ReportsView:
     def __init__(self, parent):
         self.parent = parent
@@ -119,35 +135,44 @@ class ReportsView:
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
 
         columns = (
-            "id",
-            "placa",
-            "empleado",
-            "servicios",
-            "tiempo",
-            "fecha_ingreso",
-            "fecha_salida",
-            "monto_total"
+            "Operacion",
+            "Placa",
+            "Empleado",
+            "TipoOperacion",
+            "Servicios",
+            "Tiempo",
+            "FechaIngreso",
+            "FechaSalida",
+            "MontoParqueo",
+            "MontoServicios",
+            "MontoTotal"
         )
 
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
 
-        self.tree.heading("id", text="ID")
-        self.tree.heading("placa", text="Placa")
-        self.tree.heading("empleado", text="Empleado")
-        self.tree.heading("servicios", text="Servicios")
-        self.tree.heading("tiempo", text="Tiempo")
-        self.tree.heading("fecha_ingreso", text="Fecha ingreso")
-        self.tree.heading("fecha_salida", text="Fecha salida")
-        self.tree.heading("monto_total", text="Monto cobrado")
+        self.tree.heading("Operacion", text="ID")
+        self.tree.heading("Placa", text="Placa")
+        self.tree.heading("Empleado", text="Empleado")
+        self.tree.heading("TipoOperacion", text="Modalidad")
+        self.tree.heading("Servicios", text="Servicios")
+        self.tree.heading("Tiempo", text="Tiempo")
+        self.tree.heading("FechaIngreso", text="Fecha ingreso")
+        self.tree.heading("FechaSalida", text="Fecha salida")
+        self.tree.heading("MontoParqueo", text="Parqueo")
+        self.tree.heading("MontoServicios", text="Servicios Bs")
+        self.tree.heading("MontoTotal", text="Monto cobrado")
 
-        self.tree.column("id", width=60, anchor="center", stretch=False)
-        self.tree.column("placa", width=110, anchor="center", stretch=False)
-        self.tree.column("empleado", width=180, anchor="w", stretch=False)
-        self.tree.column("servicios", width=260, anchor="w", stretch=False)
-        self.tree.column("tiempo", width=100, anchor="center", stretch=False)
-        self.tree.column("fecha_ingreso", width=150, anchor="center", stretch=False)
-        self.tree.column("fecha_salida", width=150, anchor="center", stretch=False)
-        self.tree.column("monto_total", width=120, anchor="center", stretch=False)
+        self.tree.column("Operacion", width=60, anchor="center", stretch=False)
+        self.tree.column("Placa", width=110, anchor="center", stretch=False)
+        self.tree.column("Empleado", width=180, anchor="w", stretch=False)
+        self.tree.column("TipoOperacion", width=100, anchor="center", stretch=False)
+        self.tree.column("Servicios", width=240, anchor="w", stretch=False)
+        self.tree.column("Tiempo", width=100, anchor="center", stretch=False)
+        self.tree.column("FechaIngreso", width=150, anchor="center", stretch=False)
+        self.tree.column("FechaSalida", width=150, anchor="center", stretch=False)
+        self.tree.column("MontoParqueo", width=100, anchor="center", stretch=False)
+        self.tree.column("MontoServicios", width=110, anchor="center", stretch=False)
+        self.tree.column("MontoTotal", width=120, anchor="center", stretch=False)
 
         scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         scrollbar_x = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
@@ -219,43 +244,45 @@ class ReportsView:
             messagebox.showwarning("Fecha inválida", "La fecha 'Hasta' debe estar en formato YYYY-MM-DD.")
             return
 
-        if date_from and date_to:
-            if date_from > date_to:
-                messagebox.showwarning("Rango inválido", "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.")
-                return
+        if date_from and date_to and date_from > date_to:
+            messagebox.showwarning("Rango inválido", "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.")
+            return
 
         conn = get_connection()
         cursor = conn.cursor()
 
         query = """
             SELECT
-                o.id,
-                v.placa,
-                u.nombre,
-                o.minutos_estadia,
-                o.fecha_ingreso,
-                o.fecha_salida,
-                o.monto_total
-            FROM operaciones o
-            INNER JOIN vehiculos v ON o.vehiculo_id = v.id
-            LEFT JOIN usuarios u ON o.usuario_salida_id = u.id
-            WHERE o.estado = 'finalizado'
+                O.Operacion,
+                V.Placa,
+                U.Nombre AS Empleado,
+                O.TipoOperacion,
+                O.MinutosEstadia,
+                O.FechaIngreso,
+                O.FechaSalida,
+                O.MontoParqueo,
+                O.MontoServicios,
+                O.MontoTotal
+            FROM OPERACION O
+            INNER JOIN VEHICULO V ON O.Vehiculo = V.Vehiculo
+            LEFT JOIN USUARIO U ON O.UsuarioSalida = U.Usuario
+            WHERE O.Estado = ?
         """
-        params = []
+        params = [ESTADO_OPERACION_FINALIZADO]
 
         if date_from:
-            query += " AND date(o.fecha_salida) >= date(?)"
+            query += " AND date(O.FechaSalida) >= date(?)"
             params.append(date_from)
 
         if date_to:
-            query += " AND date(o.fecha_salida) <= date(?)"
+            query += " AND date(O.FechaSalida) <= date(?)"
             params.append(date_to)
 
         if plate:
-            query += " AND REPLACE(UPPER(v.placa), ' ', '') LIKE ?"
-            params.append(f"%{plate.replace(' ', '')}%")
+            query += " AND REPLACE(REPLACE(UPPER(V.Placa), ' ', ''), '-', '') LIKE ?"
+            params.append(f"%{plate.replace(' ', '').replace('-', '')}%")
 
-        query += " ORDER BY o.fecha_salida DESC"
+        query += " ORDER BY O.FechaSalida DESC"
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -264,13 +291,16 @@ class ReportsView:
         total_generated = 0.0
 
         for row in rows:
-            operation_id = row[0]
-            placa = row[1] or ""
-            empleado = row[2] if row[2] else "-"
-            minutos = int(row[3] or 0)
-            fecha_ingreso = row[4] or ""
-            fecha_salida = row[5] or ""
-            monto_total = float(row[6] or 0)
+            operation_id = row["Operacion"]
+            placa = row["Placa"] or ""
+            empleado = row["Empleado"] if row["Empleado"] else "-"
+            tipo_operacion = nombre_tipo_operacion(row["TipoOperacion"])
+            minutos = int(row["MinutosEstadia"] or 0)
+            fecha_ingreso = row["FechaIngreso"] or ""
+            fecha_salida = row["FechaSalida"] or ""
+            monto_parqueo = float(row["MontoParqueo"] or 0)
+            monto_servicios = float(row["MontoServicios"] or 0)
+            monto_total = float(row["MontoTotal"] or 0)
 
             tiempo = self.format_duration(minutos)
             servicios = self.get_operation_services(cursor, operation_id)
@@ -279,10 +309,13 @@ class ReportsView:
                 operation_id,
                 placa,
                 empleado,
+                tipo_operacion,
                 servicios,
                 tiempo,
                 fecha_ingreso,
                 fecha_salida,
+                f"Bs {monto_parqueo:.2f}",
+                f"Bs {monto_servicios:.2f}",
                 f"Bs {monto_total:.2f}"
             )
 
@@ -290,11 +323,14 @@ class ReportsView:
                 "id": operation_id,
                 "placa": placa,
                 "empleado": empleado,
+                "tipo_operacion": tipo_operacion,
                 "servicios": servicios,
                 "tiempo": tiempo,
                 "minutos": minutos,
                 "fecha_ingreso": fecha_ingreso,
                 "fecha_salida": fecha_salida,
+                "monto_parqueo": monto_parqueo,
+                "monto_servicios": monto_servicios,
                 "monto_total": monto_total
             })
 
@@ -307,15 +343,15 @@ class ReportsView:
 
     def get_operation_services(self, cursor, operation_id):
         cursor.execute("""
-            SELECT s.nombre
-            FROM operacion_servicios os
-            INNER JOIN servicios s ON os.servicio_id = s.id
-            WHERE os.operacion_id = ? AND os.estado != 'cancelado'
-            ORDER BY s.nombre ASC
-        """, (operation_id,))
+            SELECT S.Nombre
+            FROM OPERACIONSERVICIO OS
+            INNER JOIN SERVICIO S ON OS.Servicio = S.Servicio
+            WHERE OS.Operacion = ? AND OS.Estado != ?
+            ORDER BY S.Nombre ASC
+        """, (operation_id, ESTADO_OPERACION_SERVICIO_CANCELADO))
         rows = cursor.fetchall()
 
-        names = [r[0] for r in rows]
+        names = [r["Nombre"] for r in rows]
         if not names:
             return "Parqueo"
         return "Parqueo, " + ", ".join(names)
@@ -344,10 +380,13 @@ class ReportsView:
                 "ID",
                 "Placa",
                 "Empleado",
+                "Modalidad",
                 "Servicios",
                 "Tiempo",
                 "Fecha ingreso",
                 "Fecha salida",
+                "Monto parqueo",
+                "Monto servicios",
                 "Monto cobrado"
             ]
             sheet.append(headers)
@@ -362,29 +401,35 @@ class ReportsView:
                     row["id"],
                     row["placa"],
                     row["empleado"],
+                    row["tipo_operacion"],
                     row["servicios"],
                     row["tiempo"],
                     row["fecha_ingreso"],
                     row["fecha_salida"],
+                    row["monto_parqueo"],
+                    row["monto_servicios"],
                     row["monto_total"]
                 ])
 
             total = sum(row["monto_total"] for row in self.current_rows)
             last_row = sheet.max_row + 2
-            sheet.cell(row=last_row, column=7, value="Total generado")
-            sheet.cell(row=last_row, column=7).font = Font(bold=True)
-            sheet.cell(row=last_row, column=8, value=total)
-            sheet.cell(row=last_row, column=8).font = Font(bold=True)
+            sheet.cell(row=last_row, column=10, value="Total generado")
+            sheet.cell(row=last_row, column=10).font = Font(bold=True)
+            sheet.cell(row=last_row, column=11, value=total)
+            sheet.cell(row=last_row, column=11).font = Font(bold=True)
 
             widths = {
                 "A": 10,
                 "B": 14,
                 "C": 22,
-                "D": 35,
-                "E": 14,
-                "F": 22,
+                "D": 14,
+                "E": 35,
+                "F": 14,
                 "G": 22,
-                "H": 16
+                "H": 22,
+                "I": 16,
+                "J": 16,
+                "K": 16
             }
 
             for col_letter, width in widths.items():

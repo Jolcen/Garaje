@@ -8,6 +8,7 @@ from modules.services import ServicesView
 from modules.reports import ReportsView
 from modules.users import UsersView
 from modules.audit_log import AuditLogView
+from modules.contracts import ContractsView
 
 
 class DashboardWindow:
@@ -78,6 +79,7 @@ class DashboardWindow:
         buttons = [
             ("Operaciones", lambda: self.show_module("Operaciones")),
             ("Vehículos / Clientes", lambda: self.show_module("Vehículos / Clientes")),
+            ("Contratos", lambda: self.show_module("Contratos")),
             ("Reportes", lambda: self.show_module("Reportes")),
         ]
 
@@ -170,6 +172,8 @@ class DashboardWindow:
             view = OperationsView(self.content_frame, self.user_data)
         elif module_name == "Vehículos / Clientes":
             view = VehiclesCustomersView(self.content_frame, self.user_data)
+        elif module_name == "Contratos":
+            view = ContractsView(self.content_frame, self.user_data)
         elif module_name == "Tarifas":
             view = RatesView(self.content_frame, self.user_data)
         elif module_name == "Servicios":
@@ -183,7 +187,10 @@ class DashboardWindow:
         else:
             return
 
-        view.build()
+        if hasattr(view, "build"):
+            view.build()
+        else:
+            view.pack(fill="both", expand=True)
 
     def logout(self):
         confirm = messagebox.askyesno("Cerrar sesión", "¿Desea cerrar sesión?")
