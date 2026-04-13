@@ -1,4 +1,4 @@
-from database.db import get_connection
+from database.db import getConnection
 
 
 # =========================================================
@@ -39,10 +39,10 @@ from database.db import get_connection
 # 4 = Nocturna
 #
 # CONTRATO.Estado:
+# 0 = Pendiente
 # 1 = Activo
 # 2 = Finalizado
 # 3 = Cancelado
-# 4 = Suspendido
 #
 # OPERACION.Estado:
 # 1 = Abierta
@@ -57,25 +57,37 @@ from database.db import get_connection
 # PAGO.MetodoPago:
 # 1 = Efectivo
 # 2 = QR
+#
+# PAGOQR.EstadoTransaccion:
+# 1 = Preparado
+# 2 = Pendiente
+# 3 = Pagado
+# 4 = Fallido
+# 5 = Anulado
+# 6 = Expirado
+#
+# PAGOQR.Moneda:
+# 1 = Dolares
+# 2 = Bolivianos
 
 
-def _fecha_actual_sql():
+def getFechaActualSql():
     return "date('now', 'localtime')"
 
 
-def _hora_actual_sql():
+def getHoraActualSql():
     return "time('now', 'localtime')"
 
 
-def _fecha_hora_actual_sql():
+def getFechaHoraActualSql():
     return "datetime('now', 'localtime')"
 
 
-def create_tables():
-    conn = get_connection()
-    cursor = conn.cursor()
+def createTables():
+    loConn = getConnection()
+    loCursor = loConn.cursor()
 
-    cursor.executescript(f"""
+    loCursor.executescript(f"""
     PRAGMA foreign_keys = ON;
 
     -- =====================================================
@@ -90,10 +102,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()})
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()})
     );
 
     -- =====================================================
@@ -109,10 +121,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()})
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()})
     );
 
     -- =====================================================
@@ -129,10 +141,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Cliente) REFERENCES CLIENTE(Cliente)
             ON UPDATE CASCADE
@@ -152,10 +164,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()})
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()})
     );
 
     -- =====================================================
@@ -169,10 +181,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()})
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()})
     );
 
     -- =====================================================
@@ -182,20 +194,28 @@ def create_tables():
         TarifaDetalle INTEGER PRIMARY KEY AUTOINCREMENT,
         Tarifa INTEGER NOT NULL,
         TipoCobro INTEGER NOT NULL CHECK (TipoCobro IN (1, 2, 3, 4)),
-        TiempoInicio INTEGER NOT NULL CHECK (TiempoInicio >= 0),
-        TiempoFin INTEGER NOT NULL CHECK (TiempoFin >= TiempoInicio),
+        TiempoInicio INTEGER NOT NULL DEFAULT 0 CHECK (TiempoInicio >= 0),
+        TiempoFin INTEGER NOT NULL DEFAULT 0 CHECK (TiempoFin >= TiempoInicio),
+        HoraInicio TEXT,
+        HoraFin TEXT,
         Monto REAL NOT NULL CHECK (Monto >= 0),
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (0, 1)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Tarifa) REFERENCES TARIFA(Tarifa)
             ON UPDATE CASCADE
-            ON DELETE CASCADE
+            ON DELETE CASCADE,
+
+        CHECK (
+            (TipoCobro = 4 AND HoraInicio IS NOT NULL AND HoraFin IS NOT NULL)
+            OR
+            (TipoCobro IN (1, 2, 3))
+        )
     );
 
     -- =====================================================
@@ -210,13 +230,14 @@ def create_tables():
         FechaInicio TEXT NOT NULL,
         FechaFin TEXT NOT NULL,
         DuracionMeses INTEGER NOT NULL CHECK (DuracionMeses > 0),
-        Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (1, 2, 3, 4)),
+        Observacion TEXT,
+        Estado INTEGER NOT NULL DEFAULT 0 CHECK (Estado IN (0, 1, 2, 3)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Cliente) REFERENCES CLIENTE(Cliente)
             ON UPDATE CASCADE
@@ -246,10 +267,10 @@ def create_tables():
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (1, 2, 3, 4)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Vehiculo) REFERENCES VEHICULO(Vehiculo)
             ON UPDATE CASCADE
@@ -272,10 +293,10 @@ def create_tables():
         Subtotal REAL NOT NULL CHECK (Subtotal >= 0),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Operacion) REFERENCES OPERACION(Operacion)
             ON UPDATE CASCADE
@@ -291,21 +312,73 @@ def create_tables():
     -- =====================================================
     CREATE TABLE IF NOT EXISTS PAGO (
         Pago INTEGER PRIMARY KEY AUTOINCREMENT,
-        Operacion INTEGER NOT NULL,
+        Operacion INTEGER,
+        TipoDetalle INTEGER NOT NULL CHECK (TipoDetalle IN (1, 2)),
+        Detalle INTEGER NOT NULL,
+        Concepto TEXT NOT NULL,
         FechaPago TEXT NOT NULL,
         MetodoPago INTEGER NOT NULL CHECK (MetodoPago IN (1, 2)),
         Monto REAL NOT NULL CHECK (Monto >= 0),
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (1, 2)),
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Operacion) REFERENCES OPERACION(Operacion)
             ON UPDATE CASCADE
             ON DELETE RESTRICT
+    );
+
+    -- =====================================================
+    -- TABLA: PAGOQR
+    -- =====================================================
+    CREATE TABLE IF NOT EXISTS PAGOQR (
+        PagoQr INTEGER PRIMARY KEY AUTOINCREMENT,
+        Pago INTEGER NOT NULL UNIQUE,
+        Cliente INTEGER,
+        NumeroPagoEmpresa TEXT NOT NULL,
+        MontoTotalQr REAL NOT NULL DEFAULT 0 CHECK (MontoTotalQr >= 0),
+        NumeroTransaccionQr TEXT,
+        NumeroAutorizacionQr TEXT,
+        CodigoClienteEmpresa TEXT,
+        TelefonoEnvio TEXT,
+        TelefonoCuentaQr TEXT,
+        Correo TEXT,
+        Moneda INTEGER NOT NULL DEFAULT 2 CHECK (Moneda IN (1, 2)),
+        EstadoTransaccion INTEGER NOT NULL DEFAULT 1 CHECK (EstadoTransaccion IN (1, 2, 3, 4, 5, 6)),
+        Mensaje TEXT,
+        MensajeSistema TEXT,
+        CodigoPago TEXT,
+        NombreArchivoRecibo TEXT,
+        RutaRecibo TEXT,
+        ReciboBase64 TEXT,
+        UrlCallback TEXT,
+        UrlRetorno TEXT,
+        DetallePedidoJson TEXT,
+        JsonRespuestaPreparacion TEXT,
+        JsonRespuestaConfirmacion TEXT,
+        JsonRespuestaConsulta TEXT,
+        FechaHoraPreparacion TEXT,
+        FechaHoraConfirmacion TEXT,
+        FechaHoraFinalizacion TEXT,
+        FechaHoraExpiracion TEXT,
+
+        Usr INTEGER NOT NULL DEFAULT 0,
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+
+        FOREIGN KEY (Pago) REFERENCES PAGO(Pago)
+            ON UPDATE CASCADE
+            ON DELETE CASCADE,
+
+        FOREIGN KEY (Cliente) REFERENCES CLIENTE(Cliente)
+            ON UPDATE CASCADE
+            ON DELETE SET NULL
     );
 
     -- =====================================================
@@ -321,10 +394,10 @@ def create_tables():
         FechaEvento TEXT NOT NULL,
 
         Usr INTEGER NOT NULL DEFAULT 0,
-        UsrFecha TEXT NOT NULL DEFAULT ({_fecha_actual_sql()}),
-        UsrHora TEXT NOT NULL DEFAULT ({_hora_actual_sql()}),
-        FechaCreacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
-        FechaModificacion TEXT NOT NULL DEFAULT ({_fecha_hora_actual_sql()}),
+        UsrFecha TEXT NOT NULL DEFAULT ({getFechaActualSql()}),
+        UsrHora TEXT NOT NULL DEFAULT ({getHoraActualSql()}),
+        FechaCreacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
+        FechaModificacion TEXT NOT NULL DEFAULT ({getFechaHoraActualSql()}),
 
         FOREIGN KEY (Usuario) REFERENCES USUARIO(Usuario)
             ON UPDATE CASCADE
@@ -340,6 +413,9 @@ def create_tables():
     CREATE INDEX IF NOT EXISTS IDX_CLIENTE_DocumentoIdentidad
         ON CLIENTE(DocumentoIdentidad);
 
+    CREATE INDEX IF NOT EXISTS IDX_CLIENTE_Telefono
+        ON CLIENTE(Telefono);
+
     CREATE INDEX IF NOT EXISTS IDX_VEHICULO_Cliente
         ON VEHICULO(Cliente);
 
@@ -352,8 +428,18 @@ def create_tables():
     CREATE INDEX IF NOT EXISTS IDX_TARIFADETALLE_TipoCobro
         ON TARIFADETALLE(TipoCobro);
 
+    CREATE INDEX IF NOT EXISTS IDX_TARIFADETALLE_Horario
+        ON TARIFADETALLE(HoraInicio, HoraFin);
+
     CREATE UNIQUE INDEX IF NOT EXISTS IDX_TARIFADETALLE_Rango
-        ON TARIFADETALLE(Tarifa, TipoCobro, TiempoInicio, TiempoFin);
+        ON TARIFADETALLE(
+            Tarifa,
+            TipoCobro,
+            TiempoInicio,
+            TiempoFin,
+            IFNULL(HoraInicio, ''),
+            IFNULL(HoraFin, '')
+        );
 
     CREATE INDEX IF NOT EXISTS IDX_CONTRATO_Cliente
         ON CONTRATO(Cliente);
@@ -398,6 +484,51 @@ def create_tables():
     CREATE INDEX IF NOT EXISTS IDX_PAGO_Operacion
         ON PAGO(Operacion);
 
+    CREATE INDEX IF NOT EXISTS IDX_PAGO_TipoDetalle
+        ON PAGO(TipoDetalle);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGO_Detalle
+        ON PAGO(Detalle);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGO_MetodoPago
+        ON PAGO(MetodoPago);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGO_FechaPago
+        ON PAGO(FechaPago);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGO_Estado
+        ON PAGO(Estado);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_Pago
+        ON PAGOQR(Pago);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroPagoEmpresa
+        ON PAGOQR(NumeroPagoEmpresa);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroTransaccionQr
+        ON PAGOQR(NumeroTransaccionQr);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroAutorizacionQr
+        ON PAGOQR(NumeroAutorizacionQr);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_EstadoTransaccion
+        ON PAGOQR(EstadoTransaccion);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_Cliente
+        ON PAGOQR(Cliente);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraPreparacion
+        ON PAGOQR(FechaHoraPreparacion);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraConfirmacion
+        ON PAGOQR(FechaHoraConfirmacion);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraFinalizacion
+        ON PAGOQR(FechaHoraFinalizacion);
+
+    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraExpiracion
+        ON PAGOQR(FechaHoraExpiracion);
+
     CREATE INDEX IF NOT EXISTS IDX_BITACORA_Usuario
         ON BITACORA(Usuario);
 
@@ -412,7 +543,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE USUARIO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Usuario = NEW.Usuario;
     END;
 
@@ -421,7 +552,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE CLIENTE
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Cliente = NEW.Cliente;
     END;
 
@@ -430,7 +561,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE VEHICULO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Vehiculo = NEW.Vehiculo;
     END;
 
@@ -439,7 +570,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE SERVICIO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Servicio = NEW.Servicio;
     END;
 
@@ -448,7 +579,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE TARIFA
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Tarifa = NEW.Tarifa;
     END;
 
@@ -457,7 +588,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE TARIFADETALLE
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE TarifaDetalle = NEW.TarifaDetalle;
     END;
 
@@ -466,7 +597,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE CONTRATO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Contrato = NEW.Contrato;
     END;
 
@@ -475,7 +606,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE OPERACION
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Operacion = NEW.Operacion;
     END;
 
@@ -484,7 +615,7 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE OPERACIONSERVICIO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE OperacionServicio = NEW.OperacionServicio;
     END;
 
@@ -493,8 +624,17 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE PAGO
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Pago = NEW.Pago;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS TR_PAGOQR_UPD
+    AFTER UPDATE ON PAGOQR
+    FOR EACH ROW
+    BEGIN
+        UPDATE PAGOQR
+        SET FechaModificacion = {getFechaHoraActualSql()}
+        WHERE PagoQr = NEW.PagoQr;
     END;
 
     CREATE TRIGGER IF NOT EXISTS TR_BITACORA_UPD
@@ -502,33 +642,33 @@ def create_tables():
     FOR EACH ROW
     BEGIN
         UPDATE BITACORA
-        SET FechaModificacion = {_fecha_hora_actual_sql()}
+        SET FechaModificacion = {getFechaHoraActualSql()}
         WHERE Bitacora = NEW.Bitacora;
     END;
     """)
 
-    conn.commit()
-    conn.close()
+    loConn.commit()
+    loConn.close()
 
 
-def insert_initial_data():
+def insertInitialData():
     """
     Inserta datos iniciales solo si no existen todavía.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
+    loConn = getConnection()
+    loCursor = loConn.cursor()
 
     # -----------------------------------------------------
     # Usuario admin inicial
     # -----------------------------------------------------
-    cursor.execute(
+    loCursor.execute(
         "SELECT COUNT(*) FROM USUARIO WHERE NombreUsuario = ?",
         ("admin",)
     )
-    admin_exists = cursor.fetchone()[0]
+    lnAdminExists = loCursor.fetchone()[0]
 
-    if admin_exists == 0:
-        cursor.execute(f"""
+    if lnAdminExists == 0:
+        loCursor.execute(f"""
             INSERT INTO USUARIO (
                 Nombre,
                 NombreUsuario,
@@ -543,8 +683,8 @@ def insert_initial_data():
             )
             VALUES (
                 ?, ?, ?, ?, ?,
-                ?, {_fecha_actual_sql()}, {_hora_actual_sql()},
-                {_fecha_hora_actual_sql()}, {_fecha_hora_actual_sql()}
+                ?, {getFechaActualSql()}, {getHoraActualSql()},
+                {getFechaHoraActualSql()}, {getFechaHoraActualSql()}
             )
         """, (
             "Administrador",
@@ -556,44 +696,44 @@ def insert_initial_data():
         ))
 
     # -----------------------------------------------------
-    # Tarifas cabecera
+    # Tarifas cabecera simplificadas
     # -----------------------------------------------------
-    cursor.execute("SELECT COUNT(*) FROM TARIFA")
-    tarifas_count = cursor.fetchone()[0]
+    loCursor.execute("SELECT COUNT(*) FROM TARIFA")
+    lnTarifasCount = loCursor.fetchone()[0]
 
-    if tarifas_count == 0:
-        tarifas = [
+    if lnTarifasCount == 0:
+        laTarifas = [
             (
-                "Tarifa General Auto",
+                "Parqueo Auto",
                 "auto",
-                "Tarifa general por horas para auto",
+                "Tarifa general de parqueo por tramos y tarifa nocturna",
                 1,
                 0
             ),
             (
-                "Tarifa Diaria Auto",
+                "Mensual Auto",
                 "auto",
-                "Tarifa por dia para auto",
+                "Tarifa mensual para contratos",
                 1,
                 0
             ),
             (
-                "Tarifa Mensual Auto",
-                "auto",
-                "Tarifa por mes para auto",
+                "Parqueo Moto",
+                "moto",
+                "Tarifa general de parqueo por tramos y tarifa nocturna",
                 1,
                 0
             ),
             (
-                "Tarifa Nocturna Auto",
-                "auto",
-                "Tarifa nocturna para auto",
+                "Mensual Moto",
+                "moto",
+                "Tarifa mensual para contratos",
                 1,
                 0
             )
         ]
 
-        cursor.executemany(f"""
+        loCursor.executemany(f"""
             INSERT INTO TARIFA (
                 Nombre,
                 TipoVehiculo,
@@ -607,65 +747,83 @@ def insert_initial_data():
             )
             VALUES (
                 ?, ?, ?, ?, ?,
-                {_fecha_actual_sql()}, {_hora_actual_sql()},
-                {_fecha_hora_actual_sql()}, {_fecha_hora_actual_sql()}
+                {getFechaActualSql()}, {getHoraActualSql()},
+                {getFechaHoraActualSql()}, {getFechaHoraActualSql()}
             )
-        """, tarifas)
+        """, laTarifas)
 
-    cursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Tarifa General Auto",))
-    fila_general = cursor.fetchone()
-    tarifa_general = fila_general[0] if fila_general else None
+    loCursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Parqueo Auto",))
+    loFilaParqueoAuto = loCursor.fetchone()
+    lnTarifaParqueoAuto = loFilaParqueoAuto[0] if loFilaParqueoAuto else None
 
-    cursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Tarifa Diaria Auto",))
-    fila_dia = cursor.fetchone()
-    tarifa_dia = fila_dia[0] if fila_dia else None
+    loCursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Mensual Auto",))
+    loFilaMensualAuto = loCursor.fetchone()
+    lnTarifaMensualAuto = loFilaMensualAuto[0] if loFilaMensualAuto else None
 
-    cursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Tarifa Mensual Auto",))
-    fila_mes = cursor.fetchone()
-    tarifa_mes = fila_mes[0] if fila_mes else None
+    loCursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Parqueo Moto",))
+    loFilaParqueoMoto = loCursor.fetchone()
+    lnTarifaParqueoMoto = loFilaParqueoMoto[0] if loFilaParqueoMoto else None
 
-    cursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Tarifa Nocturna Auto",))
-    fila_nocturna = cursor.fetchone()
-    tarifa_nocturna = fila_nocturna[0] if fila_nocturna else None
+    loCursor.execute("SELECT Tarifa FROM TARIFA WHERE Nombre = ?", ("Mensual Moto",))
+    loFilaMensualMoto = loCursor.fetchone()
+    lnTarifaMensualMoto = loFilaMensualMoto[0] if loFilaMensualMoto else None
 
     # -----------------------------------------------------
-    # Tarifas detalle
+    # Tarifas detalle simplificadas
     # -----------------------------------------------------
-    cursor.execute("SELECT COUNT(*) FROM TARIFADETALLE")
-    detalles_count = cursor.fetchone()[0]
+    loCursor.execute("SELECT COUNT(*) FROM TARIFADETALLE")
+    lnDetallesCount = loCursor.fetchone()[0]
 
-    if detalles_count == 0:
-        detalles = []
+    if lnDetallesCount == 0:
+        laDetalles = []
 
-        if tarifa_general:
-            detalles.extend([
-                (tarifa_general, 1, 1, 30, 4.0, 1, 0),
-                (tarifa_general, 1, 31, 60, 6.0, 1, 0),
-                (tarifa_general, 1, 61, 120, 10.0, 1, 0),
-                (tarifa_general, 1, 121, 180, 14.0, 1, 0),
-                (tarifa_general, 1, 181, 240, 18.0, 1, 0),
-                (tarifa_general, 1, 241, 300, 22.0, 1, 0),
-                (tarifa_general, 1, 301, 360, 26.0, 1, 0),
-                (tarifa_general, 1, 361, 420, 30.0, 1, 0),
-                (tarifa_general, 1, 421, 480, 35.0, 1, 0),
+        if lnTarifaParqueoAuto:
+            laDetalles.extend([
+                (lnTarifaParqueoAuto, 1, 1, 30, None, None, 4.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 31, 60, None, None, 6.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 61, 120, None, None, 10.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 121, 180, None, None, 14.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 181, 240, None, None, 18.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 241, 300, None, None, 22.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 301, 360, None, None, 26.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 361, 420, None, None, 30.0, 1, 0),
+                (lnTarifaParqueoAuto, 1, 421, 480, None, None, 35.0, 1, 0),
+                (lnTarifaParqueoAuto, 4, 0, 0, "18:00", "20:00", 25.0, 1, 0),
             ])
 
-        if tarifa_dia:
-            detalles.append((tarifa_dia, 2, 1, 1, 35.0, 1, 0))
+        if lnTarifaMensualAuto:
+            laDetalles.append(
+                (lnTarifaMensualAuto, 3, 1, 1, None, None, 300.0, 1, 0)
+            )
 
-        if tarifa_mes:
-            detalles.append((tarifa_mes, 3, 1, 1, 300.0, 1, 0))
+        if lnTarifaParqueoMoto:
+            laDetalles.extend([
+                (lnTarifaParqueoMoto, 1, 1, 30, None, None, 4.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 31, 60, None, None, 6.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 61, 120, None, None, 10.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 121, 180, None, None, 14.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 181, 240, None, None, 18.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 241, 300, None, None, 22.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 301, 360, None, None, 26.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 361, 420, None, None, 30.0, 1, 0),
+                (lnTarifaParqueoMoto, 1, 421, 480, None, None, 35.0, 1, 0),
+                (lnTarifaParqueoMoto, 4, 0, 0, "18:00", "20:00", 25.0, 1, 0),
+            ])
 
-        if tarifa_nocturna:
-            detalles.append((tarifa_nocturna, 4, 1, 1, 25.0, 1, 0))
+        if lnTarifaMensualMoto:
+            laDetalles.append(
+                (lnTarifaMensualMoto, 3, 1, 1, None, None, 300.0, 1, 0)
+            )
 
-        if detalles:
-            cursor.executemany(f"""
+        if laDetalles:
+            loCursor.executemany(f"""
                 INSERT INTO TARIFADETALLE (
                     Tarifa,
                     TipoCobro,
                     TiempoInicio,
                     TiempoFin,
+                    HoraInicio,
+                    HoraFin,
                     Monto,
                     Estado,
                     Usr,
@@ -675,27 +833,27 @@ def insert_initial_data():
                     FechaModificacion
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?,
-                    {_fecha_actual_sql()}, {_hora_actual_sql()},
-                    {_fecha_hora_actual_sql()}, {_fecha_hora_actual_sql()}
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    {getFechaActualSql()}, {getHoraActualSql()},
+                    {getFechaHoraActualSql()}, {getFechaHoraActualSql()}
                 )
-            """, detalles)
+            """, laDetalles)
 
     # -----------------------------------------------------
     # Servicios iniciales
     # -----------------------------------------------------
-    cursor.execute("SELECT COUNT(*) FROM SERVICIO")
-    servicios_count = cursor.fetchone()[0]
+    loCursor.execute("SELECT COUNT(*) FROM SERVICIO")
+    lnServiciosCount = loCursor.fetchone()[0]
 
-    if servicios_count == 0:
-        servicios = [
+    if lnServiciosCount == 0:
+        laServicios = [
             ("Lavado", "Lavado basico del vehiculo", 15.00, 1, 0),
             ("Pulido", "Pulido exterior", 25.00, 1, 0),
             ("Detailing", "Limpieza y detallado del vehiculo", 40.00, 1, 0),
             ("Mantenimiento", "Servicio general de mantenimiento", 50.00, 1, 0)
         ]
 
-        cursor.executemany(f"""
+        loCursor.executemany(f"""
             INSERT INTO SERVICIO (
                 Nombre,
                 Descripcion,
@@ -709,18 +867,18 @@ def insert_initial_data():
             )
             VALUES (
                 ?, ?, ?, ?, ?,
-                {_fecha_actual_sql()}, {_hora_actual_sql()},
-                {_fecha_hora_actual_sql()}, {_fecha_hora_actual_sql()}
+                {getFechaActualSql()}, {getHoraActualSql()},
+                {getFechaHoraActualSql()}, {getFechaHoraActualSql()}
             )
-        """, servicios)
+        """, laServicios)
 
-    conn.commit()
-    conn.close()
+    loConn.commit()
+    loConn.close()
 
 
-def initialize_database():
+def initializeDatabase():
     """
     Inicializa completamente la base de datos.
     """
-    create_tables()
-    insert_initial_data()
+    createTables()
+    insertInitialData()
