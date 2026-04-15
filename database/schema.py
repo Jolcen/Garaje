@@ -56,9 +56,11 @@ from database.db import getConnection
 #
 # PAGO.MetodoPago:
 # 1 = Efectivo
-# 2 = QR
+# 2 = Codigo Yape
+# 3 = QR
+# 4 = Tigo Money
 #
-# PAGOQR.EstadoTransaccion:
+# PAGODIGITAL.EstadoTransaccion:
 # 1 = Preparado
 # 2 = Pendiente
 # 3 = Pagado
@@ -66,7 +68,7 @@ from database.db import getConnection
 # 5 = Anulado
 # 6 = Expirado
 #
-# PAGOQR.Moneda:
+# PAGODIGITAL.Moneda:
 # 1 = Dolares
 # 2 = Bolivianos
 
@@ -317,7 +319,7 @@ def createTables():
         Detalle INTEGER NOT NULL,
         Concepto TEXT NOT NULL,
         FechaPago TEXT NOT NULL,
-        MetodoPago INTEGER NOT NULL CHECK (MetodoPago IN (1, 2)),
+        MetodoPago INTEGER NOT NULL CHECK (MetodoPago IN (1, 2, 3, 4)),
         Monto REAL NOT NULL CHECK (Monto >= 0),
         Estado INTEGER NOT NULL DEFAULT 1 CHECK (Estado IN (1, 2)),
 
@@ -333,19 +335,19 @@ def createTables():
     );
 
     -- =====================================================
-    -- TABLA: PAGOQR
+    -- TABLA: PAGODIGITAL
     -- =====================================================
-    CREATE TABLE IF NOT EXISTS PAGOQR (
-        PagoQr INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS PAGODIGITAL (
+        PagoDigital INTEGER PRIMARY KEY AUTOINCREMENT,
         Pago INTEGER NOT NULL UNIQUE,
         Cliente INTEGER,
         NumeroPagoEmpresa TEXT NOT NULL,
-        MontoTotalQr REAL NOT NULL DEFAULT 0 CHECK (MontoTotalQr >= 0),
-        NumeroTransaccionQr TEXT,
-        NumeroAutorizacionQr TEXT,
+        MontoTotal REAL NOT NULL DEFAULT 0 CHECK (MontoTotal >= 0),
+        NumeroTransaccion TEXT,
+        NumeroAutorizacion TEXT,
         CodigoClienteEmpresa TEXT,
         TelefonoEnvio TEXT,
-        TelefonoCuentaQr TEXT,
+        TelefonoCuenta TEXT,
         Correo TEXT,
         Moneda INTEGER NOT NULL DEFAULT 2 CHECK (Moneda IN (1, 2)),
         EstadoTransaccion INTEGER NOT NULL DEFAULT 1 CHECK (EstadoTransaccion IN (1, 2, 3, 4, 5, 6)),
@@ -499,35 +501,35 @@ def createTables():
     CREATE INDEX IF NOT EXISTS IDX_PAGO_Estado
         ON PAGO(Estado);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_Pago
-        ON PAGOQR(Pago);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_Pago
+        ON PAGODIGITAL(Pago);
 
-    CREATE UNIQUE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroPagoEmpresa
-        ON PAGOQR(NumeroPagoEmpresa);
+    CREATE UNIQUE INDEX IF NOT EXISTS IDX_PAGODIGITAL_NumeroPagoEmpresa
+        ON PAGODIGITAL(NumeroPagoEmpresa);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroTransaccionQr
-        ON PAGOQR(NumeroTransaccionQr);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_NumeroTransaccion
+        ON PAGODIGITAL(NumeroTransaccion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_NumeroAutorizacionQr
-        ON PAGOQR(NumeroAutorizacionQr);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_NumeroAutorizacion
+        ON PAGODIGITAL(NumeroAutorizacion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_EstadoTransaccion
-        ON PAGOQR(EstadoTransaccion);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_EstadoTransaccion
+        ON PAGODIGITAL(EstadoTransaccion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_Cliente
-        ON PAGOQR(Cliente);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_Cliente
+        ON PAGODIGITAL(Cliente);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraPreparacion
-        ON PAGOQR(FechaHoraPreparacion);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_FechaHoraPreparacion
+        ON PAGODIGITAL(FechaHoraPreparacion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraConfirmacion
-        ON PAGOQR(FechaHoraConfirmacion);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_FechaHoraConfirmacion
+        ON PAGODIGITAL(FechaHoraConfirmacion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraFinalizacion
-        ON PAGOQR(FechaHoraFinalizacion);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_FechaHoraFinalizacion
+        ON PAGODIGITAL(FechaHoraFinalizacion);
 
-    CREATE INDEX IF NOT EXISTS IDX_PAGOQR_FechaHoraExpiracion
-        ON PAGOQR(FechaHoraExpiracion);
+    CREATE INDEX IF NOT EXISTS IDX_PAGODIGITAL_FechaHoraExpiracion
+        ON PAGODIGITAL(FechaHoraExpiracion);
 
     CREATE INDEX IF NOT EXISTS IDX_BITACORA_Usuario
         ON BITACORA(Usuario);
@@ -628,13 +630,13 @@ def createTables():
         WHERE Pago = NEW.Pago;
     END;
 
-    CREATE TRIGGER IF NOT EXISTS TR_PAGOQR_UPD
-    AFTER UPDATE ON PAGOQR
+    CREATE TRIGGER IF NOT EXISTS TR_PAGODIGITAL_UPD
+    AFTER UPDATE ON PAGODIGITAL
     FOR EACH ROW
     BEGIN
-        UPDATE PAGOQR
+        UPDATE PAGODIGITAL
         SET FechaModificacion = {getFechaHoraActualSql()}
-        WHERE PagoQr = NEW.PagoQr;
+        WHERE PagoDigital = NEW.PagoDigital;
     END;
 
     CREATE TRIGGER IF NOT EXISTS TR_BITACORA_UPD

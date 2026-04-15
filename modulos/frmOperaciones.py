@@ -13,6 +13,7 @@ gnEstadoGeneralActivo = 1
 gnEstadoGeneralInactivo = 0
 
 gnEstadoOperacionIngresado = 1
+gnEstadoOperacionCerrada = 2
 gnEstadoOperacionPagada = 3
 gnEstadoOperacionCancelada = 4
 
@@ -46,6 +47,8 @@ def limpiarPlacaParaBusqueda(tcPlaca):
 def nombreEstadoOperacion(tnEstado):
     if tnEstado == gnEstadoOperacionIngresado:
         return "Ingresado"
+    if tnEstado == gnEstadoOperacionCerrada:
+        return "Cerrada"
     if tnEstado == gnEstadoOperacionPagada:
         return "Pagada"
     if tnEstado == gnEstadoOperacionCancelada:
@@ -199,7 +202,7 @@ class OperationsView:
                 lofrmHeader,
                 textvariable=self.lovEstado,
                 state="readonly",
-                values=["Todos", "Ingresado", "Pagada", "Cancelada"],
+                values=["Todos", "Ingresado", "Cerrada", "Pagada", "Cancelada"],
                 width=14
             )
             self.locboEstado.grid(row=0, column=lnColumna, padx=(0, 12), pady=5)
@@ -312,11 +315,14 @@ class OperationsView:
             return [gnEstadoOperacionIngresado]
         if lcEstado == "Pagada":
             return [gnEstadoOperacionPagada]
+        if lcEstado == "Cerrada":
+            return [gnEstadoOperacionCerrada]
         if lcEstado == "Cancelada":
             return [gnEstadoOperacionCancelada]
 
         return [
             gnEstadoOperacionIngresado,
+            gnEstadoOperacionCerrada,
             gnEstadoOperacionPagada,
             gnEstadoOperacionCancelada
         ]
@@ -636,12 +642,20 @@ class OperationsView:
         lnMontoTotal = round(lnMontoParqueo + lnMontoServicios, 2)
 
         def onPagoGuardado(_tnPago):
-            self.finalizeChargedOperation(
-                tnOperacion=tnOperacion,
-                tcFechaSalida=lcFechaSalida,
-                tnMontoParqueo=round(lnMontoParqueo, 2),
-                tnMontoServicios=round(lnMontoServicios, 2)
-            )
+            if lnMontoTotal == 0:
+                self.finalizeClosedOperation(
+                    tnOperacion=tnOperacion,
+                    tcFechaSalida=lcFechaSalida,
+                    tnMontoParqueo=0.0,
+                    tnMontoServicios=0.0
+                )
+            else:
+                self.finalizeChargedOperation(
+                    tnOperacion=tnOperacion,
+                    tcFechaSalida=lcFechaSalida,
+                    tnMontoParqueo=round(lnMontoParqueo, 2),
+                    tnMontoServicios=round(lnMontoServicios, 2)
+                )
 
         FrmCobros(
             self.toParent,
@@ -652,6 +666,75 @@ class OperationsView:
             tnMonto=lnMontoTotal,
             tfOnSave=onPagoGuardado
         )
+
+    def finalizeClosedOperation(self, tnOperacion, tcFechaSalida, tnMontoParqueo, tnMontoServicios):
+        loConn = getConnection()
+        loCursor = loConn.cursor()
+
+        try:
+            tnUsr = obtenerUsuarioActualId(self.txUsuarioData)
+
+            loCursor.execute("""
+                UPDATE OPERACION
+                SET
+                    FechaSalida = ?,
+                    MontoParqueo = ?,
+                    MontoServicios = ?,
+                    Estado = ?,
+                    Usr = ?,
+                    UsrFecha = date('now','localtime'),
+                    UsrHora = time('now','localtime'),
+                    FechaModificacion = datetime('now','localtime')
+                WHERE Operacion = ?
+            """, (
+                tcFechaSalida,
+                tnMontoParqueo,
+                tnMontoServicios,
+                gnEstadoOperacionCerrada,
+                tnUsr,
+                tnOperacion
+            ))
+
+            loCursor.execute("""
+                INSERT INTO BITACORA (
+                    Usuario,
+                    Accion,
+                    TablaAfectada,
+                    RegistroAfectado,
+                    Descripcion,
+                    FechaEvento,
+                    Usr,
+                    UsrFecha,
+                    UsrHora,
+                    FechaCreacion,
+                    FechaModificacion
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?,
+                    ?,
+                    date('now','localtime'),
+                    time('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime')
+                )
+            """, (
+                tnUsr,
+                "CERRAR_OPERACION_SIN_PAGO",
+                "OPERACION",
+                tnOperacion,
+                f"Se cerró la operación {tnOperacion} sin pago",
+                getFechaHoraActualTexto(),
+                tnUsr
+            ))
+
+            loConn.commit()
+            self.loadOperations()
+
+        except Exception as toError:
+            loConn.rollback()
+            messagebox.showerror("Error", f"No se pudo cerrar la operación sin pago.\n{str(toError)}")
+        finally:
+            loConn.close()
 
     def finalizeChargedOperation(self, tnOperacion, tcFechaSalida, tnMontoParqueo, tnMontoServicios):
         loConn = getConnection()
